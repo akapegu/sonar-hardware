@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Arduino / build output
+build/
+*.hex
+*.elf
+*.bin
+
+# Editors
+.vscode/
+.idea/
+
+# Python (Mac-side capture scripts)
+__pycache__/
+*.pyc
+.venv/
