@@ -18,7 +18,7 @@
 //                 audible); t = 0: exact official samples. Default 0.
 //
 // SAFETY (docs/rig-handoff.md, "Firmware safety rules"):
-//   * LEVEL_START = 10% of full scale; LEVEL_CAP (40% for the stepwise tests, normally 14%) is a
+//   * LEVEL_START = 10% of full scale; LEVEL_CAP = 14% is a
 //     compile-time hard limit, checked by
 //     static_assert, and every final sample is clamped to it. No runtime command changes it.
 //   * Sound plays ONLY while the Mac has the USB port open. Each channel ramps up from 0 over
@@ -45,12 +45,11 @@ static const uint8_t PIN_AMP_DIN = 2;    // SAI2_TX_DATA
 
 // ---- Output safety limits (compile-time only) ----
 static constexpr float LEVEL_START = 0.10f;  // playback level, fraction of full scale
-// Raised from 14% to 40% on 2026-11-26 at the user's explicit request, for short stepwise
-// tests on the glasses (the speakers are rated 5 mW; 40% is ~32 mW continuous, so tests stay
-// short with a touch check after each step). Put it back to 0.14f for normal use.
-static constexpr float LEVEL_CAP = 0.40f;    // hard limit, never exceeded
+// Back to 14% (2026-11-26) after the stepwise tests (which briefly allowed 40%): 14% is ~4 mW
+// into the 16-ohm speaker, inside its 5 mW rating. Normal use is 10% (LEVEL_START).
+static constexpr float LEVEL_CAP = 0.14f;    // hard limit, never exceeded
 static_assert(LEVEL_START > 0.0f && LEVEL_START <= LEVEL_CAP, "start level above cap");
-static_assert(LEVEL_CAP <= 0.40f, "experimental cap must stay <= 40%");
+static_assert(LEVEL_CAP <= 0.14f, "cap must stay <= 14% (speaker rated 5 mW)");
 static constexpr float RAMP_UP_S = 1.0f;     // >= 0.5 s required
 static constexpr float RAMP_DOWN_S = 0.1f;
 static_assert(RAMP_UP_S >= 0.5f, "soft start must be >= 0.5 s");
