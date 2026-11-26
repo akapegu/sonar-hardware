@@ -4,9 +4,8 @@
 // with the SAI1 receiver: mic 1 DATA on pin 8 (RX_DATA0), mic 2 DATA on pin 6 (RX_DATA1).
 // Streams the raw bits to the Mac over USB.
 //
-// SAFETY: this sketch produces NO audio. The SAI transmitter is never enabled. Pin 7 (amp DIN)
-// and pin 20 (amp LRCLK) are held LOW as plain GPIO, so the amps never get a valid I2S stream
-// and stay silent. Keep the speakers disconnected anyway for this experiment.
+// SAFETY: this sketch produces NO audio. No transmitter is enabled, and the amp pins (4 BCLK,
+// 3 LRCLK, 2 DIN) are held LOW as plain GPIO, so the amps get no clock and stay in standby. Keep the speakers disconnected anyway for this experiment.
 //
 // Mic start-up rule (datasheet: "Do not power up into ultrasonic mode"):
 //   1. start the clock at 1.6 MHz (standard mode), wait 200 ms,
@@ -24,8 +23,10 @@
 
 #include <Arduino.h>
 
-static const uint8_t PIN_AMP_LRCLK = 20;
-static const uint8_t PIN_AMP_DIN = 7;
+// Amp pins (SAI2 since 2026-11-26): held LOW here so the amps get no clock and stay in standby.
+static const uint8_t PIN_AMP_BCLK = 4;
+static const uint8_t PIN_AMP_LRCLK = 3;
+static const uint8_t PIN_AMP_DIN = 2;
 
 static const uint32_t SAI_DIV_1M6 = 7;  // 1.6 MHz, standard mode (start-up)
 static const uint32_t SAI_DIV_3M2 = 3;  // 3.2 MHz, ultrasonic mode
@@ -145,6 +146,8 @@ static void put_u16(uint8_t *p, uint16_t v) { memcpy(p, &v, 2); }
 
 void setup() {
   // Amps: no LRCLK, no data -> silent.
+  pinMode(PIN_AMP_BCLK, OUTPUT);
+  digitalWrite(PIN_AMP_BCLK, LOW);
   pinMode(PIN_AMP_LRCLK, OUTPUT);
   digitalWrite(PIN_AMP_LRCLK, LOW);
   pinMode(PIN_AMP_DIN, OUTPUT);

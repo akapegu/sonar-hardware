@@ -194,3 +194,32 @@ quiet room) at drive strength 6 (chip default, SPEED 2), stable over 10 s; stren
 works with less margin. Re-run `tools/pad_scan.py` (needs speaker_sweep, speaker disconnected)
 whenever the mic wiring changes, e.g. on the glasses.
 
+### Amps moved to their own clock pins (2026-11-26)
+
+With both mic clock wires on the shared BCLK (even behind 47 Ω resistors), the amps stayed muted:
+a 1 kHz tone and the sweep were silent, and unplugging the mic clock wires made the sweep
+audible straight away. The amps now run from the Teensy's second audio port (SAI2), clocked from
+the same PLL4 with the same dividers, so playback and recording run at exactly the same rate:
+
+| Signal | Teensy pin | Goes to |
+|---|---|---|
+| Mic BCLK (SAI1) | 21 | 47 Ω → mic 1 CLK, 47 Ω → mic 2 CLK |
+| Mic 1 DATA | 6 | mic 1 (braided bundle) |
+| Mic 2 DATA | 8 | mic 2 (straight bundle) |
+| Amp BCLK (SAI2) | **4** | amp A + amp B BCLK |
+| Amp LRCLK | **3** | amp A + amp B LRC |
+| Amp DIN | **2** | amp A + amp B DIN |
+| (unused) | 7, 20 | nothing |
+
+This supersedes the pin 20/7 amp wiring above. Result: amp A + a good speaker plays the sweep,
+both mics are clean (about −82 dB floor) and hear it.
+
+First response reading (good speaker 10 cm from mic 1, 10% level, 15–45 kHz sweep), dB above the
+no-speaker floor: 15–25 kHz about +20, 25–30 kHz +17, 30–32.5 kHz +11, 32.5–35 kHz +6,
+35–40 kHz +1 to +3, above 40 kHz nothing. That is far steeper than the amp filter alone (−3 dB at
+31 kHz), so the speaker is likely the main limit for the 29–39 kHz band. Not yet a careful
+measurement (SNR limited, one position).
+
+The heat-damaged test speaker gave no sound in the earlier runs, but those were all with the
+muted amp; it has not been re-tested since the clock fix.
+

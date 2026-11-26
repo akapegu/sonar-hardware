@@ -10,20 +10,24 @@
 //   * Sound plays ONLY while the Mac has the USB port open (the capture script is running).
 //     Level ramps up from 0 over 1.0 s when the port opens, and down to 0 over 0.1 s when it
 //     closes. After any reset or upload it starts silent.
-//   * The amps only get clocks after the mics are in ultrasonic mode; before that, pins 20 (LRC)
-//     and 7 (DIN) are held LOW. If the Teensy crashes or resets, BCLK stops and the amp goes to
-//     standby (high-impedance outputs).
+//   * The amps only get clocks after the mics are in ultrasonic mode; before that, pins 4 (BCLK),
+//     3 (LRC) and 2 (DIN) are held LOW. If the Teensy crashes or resets, BCLK stops and the amp
+//     goes to standby (high-impedance outputs).
 //   * Average speaker power at 10%: about 2 mW peak, about 1 mW average (rated 5 mW).
 //
-// Clocking as in mic_capture.ino: BCLK 3.2 MHz on pin 21, LRCLK 100 kHz on pin 20, 16-bit I2S.
-// The transmitter runs synchronously from the receiver, so playback and recording share one
-// clock. USB packets are the same "SNR1" format; byte 30-31 carries the current level in
+// Two separate clock outputs (2026-11-26): the long mic wires on the shared BCLK made the amps
+// mute, so the mics and the amps now use different SAI ports:
+//   mics: SAI1 receiver, BCLK pin 21, DATA pins 8 (RX_DATA0) and 6 (RX_DATA1)
+//   amps: SAI2 transmitter, BCLK pin 4, LRCLK pin 3, DIN pin 2 (16-bit I2S, 3.2 MHz / 100 kHz)
+// Both ports divide the same PLL4 by the same ratio, so playback and recording run at exactly
+// the same rate (fixed phase offset per boot, which echo processing aligns anyway). USB packets are the same "SNR1" format; byte 30-31 carries the current level in
 // tenths of a percent (100 = 10.0%).
 
 #include <Arduino.h>
 
-static const uint8_t PIN_AMP_LRCLK = 20;
-static const uint8_t PIN_AMP_DIN = 7;
+static const uint8_t PIN_AMP_BCLK = 4;   // SAI2_TX_BCLK
+static const uint8_t PIN_AMP_LRCLK = 3;  // SAI2_TX_SYNC
+static const uint8_t PIN_AMP_DIN = 2;    // SAI2_TX_DATA
 
 // ---- Output safety limits (compile-time only) ----
 static constexpr float LEVEL_START = 0.10f;  // playback level, fraction of full scale
@@ -42,6 +46,14 @@ static constexpr uint32_t CHIRP_N = 10000;   // 100 ms
 static constexpr uint32_t PERIOD_N = 20000;  // 200 ms (chirp + silence)
 static constexpr uint32_t FADE_N = 500;      // 5 ms raised-cosine edges
 DMAMEM static float sweep[PERIOD_N];         // normalised to peak 1.0
+// Audible check: 1 kHz sine (exactly 100 samples per cycle, so PERIOD_N holds whole cycles).
+// Played at TONE_LEVEL, below LEVEL_START. Selected by the Mac with the command 'M', 1.
+static constexpr float TONE_HZ = 1000.0f;
+static constexpr float TONE_LEVEL = 0.03f;
+static_assert(TONE_LEVEL <= LEVEL_START, "tone must not be louder than the sweep");
+DMAMEM static float tone_tab[PERIOD_N];
+static float *volatile table = sweep;        // what the ISR plays
+static volatile uint8_t mode = 0, mode_wanted = 0;  // 0 = sweep, 1 = 1 kHz tone
 
 static volatile float level = 0.0f;          // current level (ISR ramps it)
 static volatile float level_target = 0.0f;
@@ -108,32 +120,37 @@ static void sai_isr() {
     ring_head = head;
     total_words += 16;
   }
+  if (I2S1_RCSR & I2S_RCSR_FEF) {  // FIFO overrun
+    fifo_errors++;
+    I2S1_RCSR |= I2S_RCSR_FEF;     // write 1 to clear
+  }
+  asm volatile("dsb");
+}
+
+static void sai2_tx_isr() {
   // Transmit: FRF is set while the TX FIFO holds 16 words or fewer; add 8 frames (16 words).
-  while (I2S1_TCSR & I2S_TCSR_FRF) {
-    const float up = LEVEL_START / (RAMP_UP_S * FS);
-    const float down = LEVEL_START / (RAMP_DOWN_S * FS);
+  while (I2S2_TCSR & I2S_TCSR_FRF) {
     float lv = level;
     const float tgt = level_target;
+    // Ramp rate scales with the target, so any level takes RAMP_UP_S to reach (>= 0.5 s rule).
+    const float up = fmaxf(tgt, 0.001f) / (RAMP_UP_S * FS);
+    const float down = LEVEL_START / (RAMP_DOWN_S * FS);
     for (int i = 0; i < 8; i++) {
       if (lv < tgt) lv = fminf(lv + up, tgt);
       else if (lv > tgt) lv = fmaxf(lv - down, tgt);
       if (lv > LEVEL_CAP) lv = LEVEL_CAP;
-      int32_t s = (int32_t)lrintf(sweep[sweep_pos] * lv * 32767.0f);
+      int32_t s = (int32_t)lrintf(table[sweep_pos] * lv * 32767.0f);
       if (s > SAMPLE_LIMIT) s = SAMPLE_LIMIT;     // final hard clamp
       if (s < -SAMPLE_LIMIT) s = -SAMPLE_LIMIT;
       if (++sweep_pos >= PERIOD_N) sweep_pos = 0;
-      I2S1_TDR0 = (uint32_t)(uint16_t)(int16_t)s;  // word 0 = left  = amp A
-      I2S1_TDR0 = 0;                               // word 1 = right = amp B: always silent
+      I2S2_TDR0 = (uint32_t)(uint16_t)(int16_t)s;  // word 0 = left  = amp A
+      I2S2_TDR0 = 0;                               // word 1 = right = amp B: always silent
     }
     level = lv;
   }
-  if (I2S1_TCSR & I2S_TCSR_FEF) {  // TX underrun
+  if (I2S2_TCSR & I2S_TCSR_FEF) {  // TX underrun
     tx_underruns++;
-    I2S1_TCSR |= I2S_TCSR_FEF;
-  }
-  if (I2S1_RCSR & I2S_RCSR_FEF) {  // FIFO overrun
-    fifo_errors++;
-    I2S1_RCSR |= I2S_RCSR_FEF;     // write 1 to clear
+    I2S2_TCSR |= I2S_TCSR_FEF;
   }
   asm volatile("dsb");
 }
@@ -216,25 +233,41 @@ static void build_sweep() {
     peak = fmaxf(peak, fabsf(sweep[n]));
   }
   for (uint32_t n = 0; n < PERIOD_N; n++) sweep[n] /= peak;
+  for (uint32_t n = 0; n < PERIOD_N; n++) tone_tab[n] = sinf(2.0f * (float)M_PI * TONE_HZ * n / FS);
   arm_dcache_flush(sweep, sizeof(sweep));
+  arm_dcache_flush(tone_tab, sizeof(tone_tab));
 }
 
-// Start the transmitter (synchronous to the receiver, so same BCLK/LRCLK). Level starts at 0.
+// Start the amp transmitter on SAI2 (async master, own pins). Level starts at 0.
 static void sai_tx_begin() {
-  I2S1_TCSR = 0;
-  I2S1_TMR = 0;
-  I2S1_TCR1 = I2S_TCR1_RFW(16);   // request while <= 16 words in FIFO
-  I2S1_TCR2 = I2S_TCR2_SYNC(1) | I2S_TCR2_BCP | I2S_TCR2_BCD | I2S_TCR2_DIV(SAI_DIV_3M2) |
-              I2S_TCR2_MSEL(1);  // as the Audio library; clocks come from the receiver
-  I2S1_TCR3 = I2S_TCR3_TCE;       // channel 0 = TX_DATA0 = pin 7
-  I2S1_TCR4 = I2S_TCR4_FRSZ(1) | I2S_TCR4_SYWD(15) | I2S_TCR4_MF | I2S_TCR4_FSE |
-              I2S_TCR4_FSP | I2S_TCR4_FSD;
-  I2S1_TCR5 = I2S_TCR5_WNW(15) | I2S_TCR5_W0W(15) | I2S_TCR5_FBT(15);
-  I2S1_TCSR = I2S_TCSR_FR;
-  for (int i = 0; i < 32; i++) I2S1_TDR0 = 0;  // pre-fill with silence
-  CORE_PIN7_CONFIG = 3;    // pin 7  = SAI1_TX_DATA0 -> both amps' DIN
-  CORE_PIN20_CONFIG = 3;   // pin 20 = SAI1_RX_SYNC (LRCLK) -> both amps' LRC
-  I2S1_TCSR = I2S_TCSR_TE | I2S_TCSR_BCE | I2S_TCSR_FRIE;
+  CCM_CCGR5 |= CCM_CCGR5_SAI2(CCM_CCGR_ON);
+  // Same PLL4 (already set by sai_begin) and the same dividers as SAI1: 716.8 / 4 / 7 = 25.6 MHz.
+  CCM_CSCMR1 = (CCM_CSCMR1 & ~CCM_CSCMR1_SAI2_CLK_SEL_MASK) | CCM_CSCMR1_SAI2_CLK_SEL(2);
+  CCM_CS2CDR = (CCM_CS2CDR & ~(CCM_CS2CDR_SAI2_CLK_PRED_MASK | CCM_CS2CDR_SAI2_CLK_PODF_MASK)) |
+               CCM_CS2CDR_SAI2_CLK_PRED(4 - 1) | CCM_CS2CDR_SAI2_CLK_PODF(7 - 1);
+  IOMUXC_GPR_GPR1 = (IOMUXC_GPR_GPR1 & ~IOMUXC_GPR_GPR1_SAI2_MCLK3_SEL_MASK) |
+                    IOMUXC_GPR_GPR1_SAI2_MCLK_DIR | IOMUXC_GPR_GPR1_SAI2_MCLK3_SEL(0);
+
+  I2S2_TCSR = 0;
+  I2S2_TMR = 0;
+  I2S2_TCR1 = I2S_TCR1_RFW(16);   // request while <= 16 words in FIFO
+  I2S2_TCR2 = I2S_TCR2_SYNC(0) | I2S_TCR2_BCP | I2S_TCR2_BCD | I2S_TCR2_DIV(SAI_DIV_3M2) |
+              I2S_TCR2_MSEL(1);   // 3.2 MHz BCLK, data changes on the falling edge
+  I2S2_TCR3 = I2S_TCR3_TCE;       // channel 0 = TX_DATA = pin 2
+  I2S2_TCR4 = I2S_TCR4_FRSZ(1) | I2S_TCR4_SYWD(15) | I2S_TCR4_MF | I2S_TCR4_FSE |
+              I2S_TCR4_FSP | I2S_TCR4_FSD;   // standard I2S: LRCLK low = left = amp A
+  I2S2_TCR5 = I2S_TCR5_WNW(15) | I2S_TCR5_W0W(15) | I2S_TCR5_FBT(15);
+  I2S2_TCSR = I2S_TCSR_FR;
+  for (int i = 0; i < 32; i++) I2S2_TDR0 = 0;  // pre-fill with silence
+
+  attachInterruptVector(IRQ_SAI2, sai2_tx_isr);
+  NVIC_SET_PRIORITY(IRQ_SAI2, 64);
+  NVIC_ENABLE_IRQ(IRQ_SAI2);
+
+  CORE_PIN2_CONFIG = 2;    // pin 2 = SAI2_TX_DATA -> both amps' DIN
+  CORE_PIN3_CONFIG = 2;    // pin 3 = SAI2_TX_SYNC (LRCLK) -> both amps' LRC
+  CORE_PIN4_CONFIG = 2;    // pin 4 = SAI2_TX_BCLK -> both amps' BCLK
+  I2S2_TCSR = I2S_TCSR_TE | I2S_TCSR_BCE | I2S_TCSR_FRIE;
 }
 
 static void sai_rx_edge(uint8_t falling);
@@ -252,7 +285,7 @@ static void set_pads(uint8_t dse, uint8_t speed, uint8_t flags) {
   if (f != rx_falling) sai_rx_edge(f);
 }
 
-// Change only which BCLK edge the receiver samples on. The clock pauses for about one frame.
+// Change only which BCLK edge the mic receiver samples on. The mic clock pauses ~one frame.
 static void sai_rx_edge(uint8_t falling) {
   rx_falling = falling;
   if (!(I2S1_RCSR & I2S_RCSR_RE)) return;  // not running yet; sai_set_bclk applies it
@@ -270,6 +303,8 @@ static void put_u16(uint8_t *p, uint16_t v) { memcpy(p, &v, 2); }
 
 void setup() {
   // Amps: no LRCLK, no data -> silent until sai_tx_begin().
+  pinMode(PIN_AMP_BCLK, OUTPUT);
+  digitalWrite(PIN_AMP_BCLK, LOW);
   pinMode(PIN_AMP_LRCLK, OUTPUT);
   digitalWrite(PIN_AMP_LRCLK, LOW);
   pinMode(PIN_AMP_DIN, OUTPUT);
@@ -289,6 +324,7 @@ void setup() {
 
 void loop() {
   static bool was_open = false;
+  static bool was_open_prev = false;
   static uint32_t last_led = 0;
 
   if (millis() - last_led >= 250) {  // heartbeat: LED blinks 2x per second
@@ -296,10 +332,18 @@ void loop() {
     digitalToggle(LED_BUILTIN);
   }
 
-  while (Serial.available() >= 4) {  // pad command
-    if (Serial.read() != 'P') continue;
+  // Commands from the Mac: 'P' dse speed flags (pin settings), 'M' m 0 0 (0 sweep, 1 tone).
+  while (Serial.available() >= 4) {
+    int c = Serial.read();
+    if (c != 'P' && c != 'M') continue;
     uint8_t d = Serial.read(), sp = Serial.read(), h = Serial.read();
-    if (d >= 1 && d <= 7 && sp <= 3 && h <= 15) set_pads(d, sp, h);
+    if (c == 'P' && d >= 1 && d <= 7 && sp <= 3 && h <= 15) set_pads(d, sp, h);
+    if (c == 'M' && d <= 1) mode_wanted = d;
+  }
+  // Mode change: fade to silence, swap the table, then the normal soft start brings it back.
+  if (mode_wanted != mode && level == 0.0f) {
+    table = mode_wanted ? tone_tab : sweep;
+    mode = mode_wanted;
   }
 
   bool open = Serial.dtr();
@@ -311,7 +355,11 @@ void loop() {
     seq = 0;
   }
   was_open = open;
-  level_target = open ? LEVEL_START : 0.0f;  // sound only while the capture script runs
+  float tgt = mode ? TONE_LEVEL : LEVEL_START;
+  if (mode_wanted != mode) tgt = 0.0f;       // fading out for a mode change
+  level_target = open ? tgt : 0.0f;          // sound only while the Mac has the port open
+  if (!open && was_open_prev) mode_wanted = 0;  // port just closed: back to the sweep
+  was_open_prev = open;
   if (!open) {
     ring_tail = ring_head;  // nobody listening: discard
     return;
