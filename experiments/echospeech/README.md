@@ -7,7 +7,7 @@ command set trained on the wearer's own data, as EchoSpeech does.
 | | EchoSpeech | Here |
 |---|---|---|
 | Vocabulary | 31 commands, 32 word labels (Table 1) | same, [commands.py](commands.py) |
-| Session | each command ×4, random order, ≤3 s, space = next, x = redo; remount between sessions; session 1 = familiarisation | same, [collect_server.py](collect_server.py) + [collect.html](collect.html) |
+| Session | each command ×4, random order, ≤3 s auto-advance, space = next, x = redo; remount between sessions; session 1 = familiarisation | each command ×4, random order, push-to-record (space start/stop, ≤4 s), x = redo; participants and numbered sessions; live echo picture ([collect_server.py](collect_server.py), [collect.html](collect.html), [live_view.py](live_view.py)) |
 | Signal | 2 speakers on separate bands (18–21 / 21.5–24.5 kHz), 50 kHz, 12 ms sweeps, 4 paths | split bands 18–24 / 25–31 kHz, 100 kHz, 5 ms sweeps, 4 paths ([../split_bands](../split_bands)) |
 | Features | differential echo profiles, 4 channels | same |
 | Model | ResNet-18 + CTC, range-axis pooling, one output per 16 frames; Adam lr 2e-4, cosine, batch 5 | same (to do) |
@@ -18,13 +18,21 @@ command set trained on the wearer's own data, as EchoSpeech does.
 
 ## Collecting
 
-1. Teensy runs `experiments/split_bands` (both speakers on, 10%, soft edges).
-2. `.venv/bin/python experiments/echospeech/collect_server.py`, open http://localhost:8765.
-3. Enter starts a session (124 prompts, about 5–6 min). Mouth each word silently, slightly larger
-   than speaking aloud; space when done, x to redo, p to pause.
-4. Take the glasses off and on between sessions. Session 1 is practice.
+1. Teensy runs `experiments/split_bands` (both speakers on, 10%, soft edges, 14% hard cap).
+2. `.venv/bin/python experiments/echospeech/collect_server.py`, open http://localhost:8765
+   (`--dry` runs the page without the Teensy).
+3. Start screen: participant ID, command set (all 31, one group, or a custom list), repeats per
+   command (default 4), practice tick box; the right side lists that person's sessions with a
+   Delete button (two clicks; the session is moved to `captures/echospeech/_trash/`, not erased).
+4. Recording screen: the word to mouth on top, a live enhanced echo picture of all 4 paths below.
+   **space** starts a take, **space** ends it (auto-end after 4 s), **x** redoes the word, **p**
+   pauses, **q** ends the session early and saves it.
+5. Take the glasses off and on between sessions; mark the first session of each person as practice.
 
-Sessions land in `captures/echospeech/<id>/` (`raw_words.npy`, `events.json`; git-ignored).
+Layout: `captures/echospeech/<person>/s<NN>_<date>[_practice]/` with `raw_words.npy` and
+`events.json` (person, session number, command set and prompt order, level, firmware, git commit,
+and every take with start/end in 100 kHz samples). `build_dataset.py` turns each session into
+`clips_enhanced.npz` (default) or `clips_plain.npz`.
 
 ## Details from the full paper that matter for this rig
 

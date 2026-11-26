@@ -120,11 +120,15 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--mode", default="enhanced", choices=["enhanced", "plain"])
     a = ap.parse_args()
-    for sdir in sorted((ROOT / "captures" / "echospeech").glob("*")):
-        if not (sdir / "events.json").exists() or ((sdir / f"clips_{a.mode}.npz").exists() and not a.force):
+    base = ROOT / "captures" / "echospeech"
+    for ev in sorted(base.glob("*/*/events.json")):  # <person>/<session>/events.json
+        sdir = ev.parent
+        if sdir.parts[-2] == "_trash" or "_trash" in sdir.parts:
+            continue
+        if (sdir / f"clips_{a.mode}.npz").exists() and not a.force:
             continue
         n, secs = build(sdir, a.mode)
-        print(f"{sdir.name}: {n} clips from {secs:.0f} s")
+        print(f"{sdir.parent.name}/{sdir.name}: {n} clips from {secs:.0f} s")
 
 
 if __name__ == "__main__":

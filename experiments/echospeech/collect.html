@@ -3,158 +3,285 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EchoSpeech Collection</title>
+<title>Silent Command Collection</title>
 <style>
 :root {
-  --bg: #0f1412; --panel: #18201c; --fg: #e8efe9; --muted: #8fa097; --line: #2c3832;
-  --accent: #4fc7b5; --warn: #f0a24e; --bad: #ff8a80;
-  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #0f1412; --panel: #172019; --panel2: #1d2822; --fg: #e8efe9; --muted: #8fa097; --line: #2c3832;
+  --accent: #4fc7b5; --rec: #ff6b5e; --warn: #f0a24e;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--fg); font-family: var(--sans);
-  display: grid; grid-template-rows: auto 1fr auto; padding: 20px max(16px, 3vw); gap: 16px; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); display: grid;
+  grid-template-rows: auto 1fr; padding: 16px max(16px, 2.5vw); gap: 14px; }
 header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h1 { font-size: 17px; margin: 0; font-weight: 600; }
 .meta { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
-main { display: grid; place-items: center; text-align: center; }
-#word { font-size: clamp(56px, 14vw, 160px); font-weight: 700; letter-spacing: .01em; line-height: 1.05; }
-#word.gap { color: var(--line); }
-#sub { color: var(--muted); font-size: 18px; margin-top: 12px; min-height: 1.4em; }
-.bar { width: min(720px, 90vw); height: 10px; background: var(--panel); border-radius: 6px; overflow: hidden; margin: 28px auto 0; }
-.bar > div { height: 100%; width: 0; background: var(--accent); }
-.session { width: min(720px, 90vw); height: 4px; background: var(--panel); border-radius: 3px; overflow: hidden; margin: 10px auto 0; }
-.session > div { height: 100%; width: 0; background: var(--muted); }
-footer { color: var(--muted); font-size: 14px; display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
-kbd { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg); font-family: inherit; }
-#start { display: grid; gap: 14px; justify-items: center; max-width: 640px; }
-#start p { margin: 0; color: var(--muted); line-height: 1.5; }
-input { background: var(--panel); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 10px 12px; font-size: 16px; width: 260px; }
-button { background: var(--accent); color: #062a24; border: 0; border-radius: 8px; padding: 12px 22px; font-size: 16px; font-weight: 600; cursor: pointer; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-.err { color: var(--bad); }
-.paused #word { color: var(--warn); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+/* start screen */
+#setup { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 860px) { #setup { grid-template-columns: 1fr; } }
+.form { display: grid; gap: 12px; }
+label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+input, select, textarea { background: var(--panel2); border: 1px solid var(--line); color: var(--fg); border-radius: 7px;
+  padding: 9px 11px; font-size: 15px; font-family: inherit; }
+textarea { min-height: 70px; resize: vertical; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row label { flex: 1; }
+.check { display: flex; gap: 8px; align-items: center; color: var(--fg); font-size: 14px; }
+button { background: var(--accent); color: #062a24; border: 0; border-radius: 8px; padding: 11px 18px; font-size: 15px;
+  font-weight: 600; cursor: pointer; font-family: inherit; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 5px 10px; font-size: 13px; font-weight: 500; }
+button.danger { background: var(--rec); color: #2a0703; padding: 5px 10px; font-size: 13px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; }
+.err { color: var(--rec); font-size: 14px; min-height: 1.2em; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--warn); color: var(--warn); }
+.empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+/* recording screen */
+#run { display: grid; grid-template-rows: auto auto 1fr; gap: 14px; min-height: 0; }
+#prompt { display: grid; place-items: center; text-align: center; gap: 8px; padding: 18px; }
+#instruction { font-size: 15px; color: var(--muted); min-height: 1.3em; }
+#word { font-size: clamp(52px, 11vw, 132px); font-weight: 700; line-height: 1.05; }
+#word.dim { color: var(--line); }
+#status { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; color: var(--muted); }
+#status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+#status.rec { color: var(--rec); } #status.rec .dot { background: var(--rec); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { #status.rec .dot { animation: none; } }
+.bar { width: min(640px, 86vw); height: 8px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
+.bar > div { height: 100%; width: 0; background: var(--rec); }
+.sbar { height: 4px; background: var(--panel2); border-radius: 3px; overflow: hidden; }
+.sbar > div { height: 100%; width: 0; background: var(--muted); }
+#livebox { display: grid; gap: 6px; min-height: 0; }
+#livehead { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+canvas { width: 100%; height: 100%; min-height: 260px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
+footer.keys { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; color: var(--muted); font-size: 13px; }
+kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg); font-family: var(--mono); font-size: 12px; }
 [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
-  <h1>EchoSpeech collection · 31 commands × 4</h1>
+  <h1>Silent command collection</h1>
   <div class="meta" id="meta">not recording</div>
 </header>
-<main>
-  <section id="start">
-    <div style="font-size:28px;font-weight:600">Silent commands</div>
-    <p>Mouth each word silently, with lip movements similar to or slightly larger than speaking
-       out loud. No voice, no whisper. Keep your head still between words.</p>
-    <p>Each word stays up to 3 seconds. Press <kbd>space</kbd> as soon as you have finished,
-       <kbd>x</kbd> to repeat the word, <kbd>p</kbd> to pause. After the session, take the
-       glasses off and put them back on before starting the next one.</p>
-    <input id="name" placeholder="label (optional)" aria-label="session label">
-    <button id="go">Start session (Enter)</button>
-    <p id="err" class="err"></p>
-  </section>
-  <section id="run" hidden>
-    <div id="word" class="gap">·</div>
-    <div id="sub"></div>
-    <div class="bar"><div id="bar"></div></div>
-    <div class="session"><div id="sbar"></div></div>
-  </section>
-</main>
-<footer>
-  <span><kbd>space</kbd> next</span><span><kbd>x</kbd> repeat</span><span><kbd>p</kbd> pause</span>
-</footer>
-<script>
-const MAX_MS = 3000, GAP_MS = 700, LEAD_MS = 3000;
-const $ = id => document.getElementById(id);
-let state = "idle", total = 124, idx = 0, prompt = null, t0 = 0, timer = null, paused = false, startedAt = 0;
 
-async function post(path, body = {}) {
-  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+<section id="setup">
+  <div class="panel form">
+    <label>Participant ID
+      <input id="person" list="people" placeholder="e.g. abinash or p01" autocomplete="off">
+      <datalist id="people"></datalist>
+    </label>
+    <div class="row">
+      <label>Command set
+        <select id="cmdset"></select>
+      </label>
+      <label style="max-width:110px">Repeats each
+        <input id="reps" type="number" min="1" max="10" value="4">
+      </label>
+    </div>
+    <label id="customwrap" hidden>Custom commands (comma separated)
+      <textarea id="custom" placeholder="Play, Stop, Next"></textarea>
+    </label>
+    <label class="check"><input id="practice" type="checkbox"> Practice session (not used for training)</label>
+    <p class="hint" id="plan"></p>
+    <button id="go">Start session</button>
+    <div class="err" id="err"></div>
+    <p class="hint">Mouth each word silently, with lips moving like speaking aloud or slightly more. No voice.
+      Keep the glasses still and don't touch them. Take them off and put them back on between sessions.</p>
+  </div>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <strong id="listtitle">Sessions</strong>
+      <button class="ghost" id="refresh">Refresh</button>
+    </div>
+    <div id="sessions"></div>
+  </div>
+</section>
+
+<section id="run" hidden>
+  <div class="panel" id="prompt">
+    <div id="status"><span class="dot"></span><span id="statustext">ready</span></div>
+    <div id="word" class="dim">·</div>
+    <div id="instruction"></div>
+    <div class="bar"><div id="bar"></div></div>
+  </div>
+  <div class="sbar"><div id="sbar"></div></div>
+  <div class="panel" id="livebox">
+    <div id="livehead"><span>Live echo picture · 4 paths · last 6 s · enhanced</span><span id="liveinfo">waiting for signal…</span></div>
+    <canvas id="live" width="1200" height="320" aria-label="Live echo profiles of the four speaker-microphone paths"></canvas>
+  </div>
+  <footer class="keys">
+    <span><kbd>space</kbd> start / stop take</span><span><kbd>x</kbd> redo this word</span>
+    <span><kbd>p</kbd> pause</span><span><kbd>q</kbd> end session and save</span>
+  </footer>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+let cfg = null, state = "setup", total = 0, idx = 0, prompt = null, takeT0 = 0, raf = null, paused = false, startedAt = 0, liveTimer = null;
+const GAP_MS = 500, LEAD_MS = 3000;
+const PATHS = ["spk 0 → mic 1", "spk 0 → mic 2", "spk 1 → mic 1", "spk 1 → mic 2"];
+
+async function get(p) { return (await fetch(p)).json(); }
+async function post(p, b = {}) {
+  const r = await fetch(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
   return r.json();
 }
-async function getState() { return (await fetch("/state")).json(); }
 
-function setBar(frac) { $("bar").style.width = (Math.max(0, Math.min(1, frac)) * 100) + "%"; }
-function setMeta() {
-  const left = Math.max(0, total - idx);
-  const per = idx > 0 ? (performance.now() - startedAt) / idx : 2500;
-  $("meta").textContent = `prompt ${Math.min(idx + 1, total)} / ${total} · about ${Math.ceil(left * per / 60000)} min left${paused ? " · paused" : ""}`;
-  $("sbar").style.width = (idx / total * 100) + "%";
+async function loadConfig() {
+  cfg = await get("/config");
+  $("cmdset").innerHTML = Object.keys(cfg.command_sets).map(k => `<option>${k}</option>`).join("") + `<option value="custom">custom…</option>`;
+  $("people").innerHTML = cfg.people.map(p => `<option value="${p}">`).join("");
+  updatePlan();
 }
+function currentCommands() {
+  const s = $("cmdset").value;
+  if (s === "custom") return $("custom").value.split(",").map(x => x.trim()).filter(Boolean);
+  return cfg.command_sets[s] || [];
+}
+function updatePlan() {
+  $("customwrap").hidden = $("cmdset").value !== "custom";
+  const n = currentCommands().length, reps = +$("reps").value || 4, prompts = n * reps;
+  $("plan").textContent = n ? `${n} commands × ${reps} = ${prompts} takes · about ${Math.round(prompts * 2.3 / 60)}–${Math.round(prompts * 4.5 / 60)} min` : "Choose at least one command.";
+}
+async function loadSessions() {
+  const person = $("person").value.trim();
+  $("listtitle").textContent = person ? `Sessions · ${person}` : "Sessions · everyone";
+  const r = await get("/sessions" + (person ? "?person=" + encodeURIComponent(person) : ""));
+  if (!r.sessions.length) { $("sessions").innerHTML = `<div class="empty">No sessions yet.</div>`; return; }
+  $("sessions").innerHTML = `<table><thead><tr><th>Person</th><th>Session</th><th>Commands</th><th>Takes</th><th>Length</th><th>Date</th><th></th></tr></thead><tbody>` +
+    r.sessions.map(s => `<tr><td>${s.person}</td><td>#${s.number}${s.practice ? ' <span class="tag">practice</span>' : ""}</td>
+      <td>${s.command_set}</td><td>${s.takes}/${s.planned}</td><td>${Math.floor(s.seconds / 60)}:${String(s.seconds % 60).padStart(2, "0")}</td>
+      <td>${s.date || ""}</td><td><button class="ghost" data-del="${s.person}|${s.session}">Delete</button></td></tr>`).join("") + `</tbody></table>`;
+}
+$("sessions").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-del]"); if (!b) return;
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirm delete"; b.className = "danger";
+    setTimeout(() => { if (b.isConnected) { b.dataset.armed = ""; b.textContent = "Delete"; b.className = "ghost"; } }, 4000); return; }
+  const [person, session] = b.dataset.del.split("|");
+  const r = await post("/delete", { person, session });
+  if (r.error) $("err").textContent = r.error;
+  loadSessions();
+});
 
 async function startSession() {
   $("err").textContent = "";
-  const r = await post("/start", { name: $("name").value });
-  total = r.total; idx = 0;
-  $("start").hidden = true; $("run").hidden = false;
-  $("word").textContent = "get ready"; $("word").className = "gap"; $("sub").textContent = "keep still";
+  const r = await post("/start", { person: $("person").value, command_set: $("cmdset").value, custom: $("custom").value,
+                                   reps: +$("reps").value, practice: $("practice").checked });
+  if (r.error) { $("err").textContent = r.error; return; }
+  total = r.total; idx = 0; paused = false;
+  $("setup").hidden = true; $("run").hidden = false;
+  setStatus("", "get ready"); $("word").textContent = "get ready"; $("word").className = "dim";
+  $("instruction").textContent = `session #${r.number}${$("practice").checked ? " (practice)" : ""} · keep still while the signal settles`;
   state = "lead"; startedAt = performance.now() + LEAD_MS;
-  setTimeout(async () => {
-    const s = await getState();
-    if (s.error) { showError(s.error); return; }
-    showPrompt();
-  }, LEAD_MS);
+  liveTimer = setInterval(drawLive, 120);
+  setTimeout(nextPrompt, LEAD_MS);
 }
-
-async function showPrompt() {
-  const s = await getState();
+function setStatus(cls, text) { $("status").className = cls; $("statustext").textContent = text; }
+function setMeta() {
+  const per = idx > 0 ? (performance.now() - startedAt) / idx : 3000;
+  $("meta").textContent = `${$("person").value} · take ${Math.min(idx + 1, total)} / ${total} · ~${Math.ceil(Math.max(0, total - idx) * per / 60000)} min left${paused ? " · paused" : ""}`;
+  $("sbar").style.width = (idx / total * 100) + "%";
+}
+async function nextPrompt() {
+  const s = await get("/state");
   if (s.error) { showError(s.error); return; }
-  if (s.prompt === null) { finish(); return; }
+  if (s.prompt === null) { finish(false); return; }
   prompt = s.prompt; idx = s.idx; setMeta();
-  await post("/show");
-  $("word").textContent = prompt; $("word").className = ""; $("sub").textContent = "";
-  state = "prompt"; t0 = performance.now();
+  $("word").textContent = prompt; $("word").className = "";
+  $("instruction").innerHTML = `press <kbd>space</kbd>, mouth the word, press <kbd>space</kbd> again`;
+  setStatus("", "ready"); state = "ready"; $("bar").style.width = "0";
+}
+async function takeStart() {
+  await post("/take_start"); state = "recording"; takeT0 = performance.now();
+  setStatus("rec", "recording"); $("instruction").innerHTML = `mouth <b>${prompt}</b> · then <kbd>space</kbd>`;
   tick();
 }
-
 function tick() {
-  if (state !== "prompt") return;
-  const el = performance.now() - t0;
-  setBar(el / MAX_MS);
-  if (el >= MAX_MS) { endPrompt("next", "auto"); return; }
-  timer = requestAnimationFrame(tick);
+  if (state !== "recording") return;
+  const el = (performance.now() - takeT0) / 1000;
+  $("bar").style.width = Math.min(100, el / cfg.max_take_s * 100) + "%";
+  if (el >= cfg.max_take_s) { takeEnd("/take_end", "timeout"); return; }
+  raf = requestAnimationFrame(tick);
 }
-
-async function endPrompt(kind, how) {
-  if (state !== "prompt") return;
-  state = "gap"; cancelAnimationFrame(timer); setBar(0);
-  const r = await post(kind === "redo" ? "/redo" : "/next", { how });
-  idx = r.idx; setMeta();
-  $("word").textContent = "·"; $("word").className = "gap";
-  $("sub").textContent = kind === "redo" ? "again" : "";
-  if (r.finished) { finish(); return; }
-  setTimeout(() => { if (!paused) showPrompt(); else state = "paused"; }, GAP_MS);
+async function takeEnd(path, how) {
+  if (state !== "recording") return;
+  state = "gap"; cancelAnimationFrame(raf); $("bar").style.width = "0";
+  const r = await post(path, { how });
+  idx = r.idx; setMeta(); setStatus("", path === "/redo" ? "again" : "saved");
+  $("word").className = "dim";
+  if (r.finished) { finish(false); return; }
+  setTimeout(() => { if (paused) { state = "paused"; setStatus("", "paused"); $("instruction").innerHTML = `press <kbd>p</kbd> to continue`; } else nextPrompt(); }, GAP_MS);
 }
-
-async function finish() {
-  state = "saving"; $("word").textContent = "saving…"; $("word").className = "gap"; $("sub").textContent = "";
-  const r = await post("/finish");
-  state = "idle";
-  $("word").textContent = "session saved";
-  $("sub").textContent = `${r.prompts} prompts · ${r.seconds.toFixed(0)} s · ${r.saved}. Take the glasses off, put them back on, then press Enter for the next session.`;
+async function finish(early) {
+  state = "saving"; setStatus("", "saving"); clearInterval(liveTimer);
+  const r = await post("/finish", { early });
+  state = "setup"; $("run").hidden = true; $("setup").hidden = false;
   $("meta").textContent = "not recording";
+  $("err").textContent = r.error ? r.error : "";
+  $("plan").textContent = r.error ? "" : `Saved ${r.takes} takes (${Math.round(r.seconds)} s) to ${r.saved}. Take the glasses off and on before the next session.`;
+  loadConfig(); loadSessions();
 }
+function showError(e) { clearInterval(liveTimer); state = "setup"; $("run").hidden = true; $("setup").hidden = false; $("err").textContent = "Recording error: " + e; }
 
-function showError(e) {
-  state = "idle"; $("run").hidden = true; $("start").hidden = false;
-  $("err").textContent = "Recording error: " + e;
+// live picture: 4 stacked strips, diverging white -> red (+) / blue (-)
+async function drawLive() {
+  let r; try { r = await get("/live"); } catch { return; }
+  if (!r.ready) { $("liveinfo").textContent = "settling…"; return; }
+  const raw = Uint8Array.from(atob(r.data), c => c.charCodeAt(0));
+  const P = r.paths, B = r.bins, F = r.frames, cv = $("live"), W = 1200;
+  const stripH = 76, gap = 4, H = P * stripH + (P - 1) * gap;
+  if (cv.height !== H) cv.height = H;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), d = img.data;
+  d.fill(255);
+  for (let p = 0; p < P; p++) {
+    const y0 = p * (stripH + gap);
+    for (let y = 0; y < stripH; y++) {
+      const bin = B - 1 - Math.floor(y * B / stripH);
+      for (let x = 0; x < W; x++) {
+        const f = Math.floor(x * F / W) - (F < 1200 ? 0 : 0);
+        const v = raw[(p * B + bin) * F + Math.min(F - 1, f)];
+        const t = (v - 127.5) / 127.5, o = ((y0 + y) * W + x) * 4;
+        if (t >= 0) { d[o] = 255; d[o + 1] = 255 * (1 - t); d[o + 2] = 255 * (1 - t); }
+        else { d[o] = 255 * (1 + t); d[o + 1] = 255 * (1 + t); d[o + 2] = 255; }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.font = "13px system-ui"; ctx.fillStyle = "#1f2328";
+  for (let p = 0; p < P; p++) ctx.fillText(PATHS[p], 8, p * (stripH + gap) + 16);
+  $("liveinfo").textContent = `${(F / 200).toFixed(1)} s shown`;
 }
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Enter" && state === "idle") { e.preventDefault(); $("start").hidden ? (() => { $("run").hidden = true; $("start").hidden = false; startSession(); })() : startSession(); }
-  else if (e.key === " " && state === "prompt") { e.preventDefault(); endPrompt("next", "space"); }
-  else if ((e.key === "x" || e.key === "X") && state === "prompt") endPrompt("redo", "x");
-  else if (e.key === "p" || e.key === "P") {
-    if (state === "idle" || state === "lead" || state === "saving") return;
-    paused = !paused; document.body.classList.toggle("paused", paused); setMeta();
-    if (paused && state === "prompt") endPrompt("redo", "pause");
-    else if (!paused && state === "paused") showPrompt();
-    $("sub").textContent = paused ? "paused · press p to continue" : "";
+  if (state === "setup") { if (e.key === "Enter" && document.activeElement.tagName !== "TEXTAREA") { e.preventDefault(); startSession(); } return; }
+  if (e.key === " ") {
+    e.preventDefault();
+    if (state === "ready") takeStart(); else if (state === "recording") takeEnd("/take_end", "space");
+  } else if (e.key === "x" || e.key === "X") {
+    if (state === "recording") takeEnd("/redo", "x");
+  } else if (e.key === "p" || e.key === "P") {
+    if (state === "lead" || state === "saving") return;
+    paused = !paused; setMeta();
+    if (paused && state === "recording") takeEnd("/redo", "pause");
+    else if (paused && state === "ready") { state = "paused"; setStatus("", "paused"); $("instruction").innerHTML = `press <kbd>p</kbd> to continue`; }
+    else if (!paused && state === "paused") nextPrompt();
+  } else if (e.key === "q" || e.key === "Q") {
+    if (state === "recording") takeEnd("/redo", "quit").then(() => finish(true)); else if (state !== "saving") finish(true);
   }
 });
+["cmdset", "reps", "custom"].forEach(id => $(id).addEventListener("input", updatePlan));
+$("person").addEventListener("change", loadSessions);
+$("refresh").addEventListener("click", loadSessions);
 $("go").addEventListener("click", startSession);
+loadConfig().then(loadSessions);
 </script>
 </body>
 </html>
