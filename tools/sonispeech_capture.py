@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record in SoniSpeech mode and compute echo profiles the way the dataset's official code does.
 
-    .venv/bin/python tools/sonispeech_capture.py --label test -s 10 --channels A [--taper]
+    .venv/bin/python tools/sonispeech_capture.py --label test -s 10 --channels A [--no-taper]
     --channels A | B | AB | none   which amps play (none = silent reference)
     --level 5      playback level in percent (only lower than 10 has an effect)
 
@@ -120,7 +120,9 @@ def main():
     ap.add_argument("--label", required=True)
     ap.add_argument("-s", "--seconds", type=float, default=10)
     ap.add_argument("--channels", default="A", choices=["A", "B", "AB", "none"])
-    ap.add_argument("--taper", action="store_true")
+    ap.add_argument("--taper", action="store_true", default=True,
+                    help="0.2 ms soft chirp edges (default on: quieter to the ear, same signal quality)")
+    ap.add_argument("--no-taper", dest="taper", action="store_false", help="exact official chirp edges")
     ap.add_argument("--level", type=float, default=10.0)
     ap.add_argument("--enhanced", action="store_true", help="also save the enhanced movement picture")
     a = ap.parse_args()
