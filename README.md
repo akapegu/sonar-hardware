@@ -51,8 +51,9 @@ average, 50 ms difference). Speech shows on all four paths, +6 to +15 dB above t
 
 ![Split bands, four paths, silent counting](docs/img/split_bands_4paths.png)
 
-Zoomed in: 4.5 s from the middle of the counting, the model's crop only (bins 226–306), each path
-standardised to ±3σ. Every mouthed number shows as its own burst on all four paths.
+Zoomed in: 4.5 s from the middle of the counting, the model's crop only (bins 226–306), drawn
+exactly like the software repo's model-input figure (same colour map; each path standardised over
+the speaking frames, ±3σ). Every mouthed number shows as its own burst on all four paths.
 
 ![Split bands, 4.5 s zoom, standardised](docs/img/split_bands_zoom.png)
 

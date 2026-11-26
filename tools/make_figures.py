@@ -96,28 +96,37 @@ def split_bands_paths():
 
 
 def split_bands_zoom(t0=9.0, t1=13.5):
-    """4.5 s of the silent counting, model crop only, each path standardised (±3 sigma)."""
+    """4.5 s of the silent counting, drawn exactly like the software repo's model-input figure
+    (sonar-glasses experiments/00_data_analysis/make_explainer_figs.py: same diverging colour map,
+    style and path names; each path standardised with mean/std over the speaking frames, ±3 sigma)."""
+    from matplotlib.colors import LinearSegmentedColormap
+    div = LinearSegmentedColormap.from_list("div", ["#184f95", "#3987e5", "#eef0f1", "#e34948", "#9e2b2b"])
+    ink, ink2, grid, plate = "#13202b", "#4b5a66", "#dde3e7", "#fbfcfc"
+    style = {"figure.facecolor": plate, "axes.facecolor": plate, "savefig.facecolor": plate,
+             "axes.edgecolor": grid, "axes.labelcolor": ink2, "xtick.color": ink2, "ytick.color": ink2,
+             "text.color": ink, "font.size": 10, "axes.titlesize": 10.5, "axes.titleweight": "semibold",
+             "axes.titlelocation": "left", "axes.spines.top": False, "axes.spines.right": False}
     prof = np.load(CAP / "sb_sb_quiet1_profiles.npy")
     E = enhanced_diff(prof)
     t = 1.2 + np.arange(prof.shape[2]) / 200
+    speak = (t >= 7.5) & (t < 18.5)
     sel = (t >= t0) & (t < t1)
-    names = ["s0m1", "s0m2", "s1m1", "s1m2"]
-    fig, ax = plt.subplots(4, 1, figsize=(11, 7.2), constrained_layout=True, sharex=True)
-    for r, (s, c) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
-        full = E[s, c][:, 226:306]
-        z = (full - full.mean()) / full.std()
-        ax[r].imshow(z[sel].T, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-3, vmax=3,
-                     extent=[0, t1 - t0, 226, 306], interpolation="nearest")
-        ax[r].set_yticks([226, 306])
-        ax[r].set_ylabel(names[r], rotation=0, labelpad=22, color=INK2, va="center")
-        for sp in ax[r].spines.values():
-            sp.set_visible(False)
-        ax[r].tick_params(colors=INK2)
-    ax[-1].set_xlabel(f"seconds  ·  {t0:.1f}–{t1:.1f} s of the recording  ·  4 paths × 80 range bins  ·  "
-                      "colour = standardised value, ±3σ", color=INK2)
-    fig.suptitle("Silent counting (split bands 18–24 / 25–31 kHz, enhanced echo profiles)",
-                 x=0.02, ha="left", fontsize=12, fontweight="bold", color=INK)
-    fig.savefig(IMG / "split_bands_zoom.png", dpi=110, facecolor="white")
+    with plt.rc_context(style):
+        fig, axes = plt.subplots(4, 1, figsize=(9, 5.4), sharex=True)
+        for k, (sp, mic) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
+            full = E[sp, mic][:, 226:306]
+            mu, sd = full[speak].mean(), full[speak].std()
+            x = (full[sel] - mu) / sd
+            axes[k].imshow(x.T, aspect="auto", origin="lower", cmap=div, vmin=-3, vmax=3,
+                           extent=[0, x.shape[0] / 200, 226, 306], interpolation="nearest")
+            axes[k].set_ylabel(f"s{sp}m{mic}", rotation=0, ha="right", va="center")
+            axes[k].set_yticks([226, 306])
+        axes[0].set_title("Our glasses, split bands 18–24 / 25–31 kHz, enhanced echo profiles\n"
+                          "“one, two, three, …” mouthed silently", fontsize=10)
+        axes[-1].set_xlabel(f"seconds  ·  tensor shape (4, 80, {int(sel.sum())})  ·  colour = standardised value, ±3σ")
+        fig.tight_layout()
+        fig.savefig(IMG / "split_bands_zoom.png", dpi=160, bbox_inches="tight")
+        plt.close(fig)
 
 
 if __name__ == "__main__":
