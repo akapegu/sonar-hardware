@@ -1,0 +1,324 @@
+<title>Sonar Rig Wiring</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one bench-schematic sheet; the drawing leads, a pin table and status notes follow. */
+:root {
+  --bg: #f6f7f5; --panel: #ffffff; --fg: #1d2421; --muted: #5d6963; --line: #c9d0cc;
+  --mic: #0f7a6c; --mic-tint: #e3f1ee; --amp: #b35c00; --amp-tint: #f8ecdf;
+  --good: #1f7a3a; --bad: #b3261e; --pos: #c0392b; --neg: #2457a6;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121614; --panel: #1a201d; --fg: #e4ebe7; --muted: #9aa8a1; --line: #34403a;
+  --mic: #4fc7b5; --mic-tint: #16302b; --amp: #f0a24e; --amp-tint: #33261a;
+  --good: #6cd08a; --bad: #ff8a80; --pos: #ff7b6b; --neg: #7aa7ff; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121614; --panel: #1a201d; --fg: #e4ebe7; --muted: #9aa8a1; --line: #34403a;
+  --mic: #4fc7b5; --mic-tint: #16302b; --amp: #f0a24e; --amp-tint: #33261a;
+  --good: #6cd08a; --bad: #ff8a80; --pos: #ff7b6b; --neg: #7aa7ff; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 1040px; margin: 0 auto; padding-block: 32px 56px; display: grid; gap: 32px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 30px; line-height: 1.15; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 18px; margin: 0 0 10px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; height: auto; min-width: 820px; color: var(--fg); font-family: var(--mono); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* drawing classes */
+.wire { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.w-mic { stroke: var(--mic); }
+.w-amp { stroke: var(--amp); }
+.dot-mic { fill: var(--mic); } .dot-amp { fill: var(--amp); }
+.ah-mic { fill: var(--mic); } .ah-amp { fill: var(--amp); }
+.box { fill: var(--panel); stroke: currentColor; stroke-width: 1.4; }
+.res { fill: var(--panel); stroke: var(--mic); stroke-width: 1.6; }
+.region-mic { fill: var(--mic-tint); } .region-amp { fill: var(--amp-tint); }
+.t { fill: currentColor; font-size: 12px; }
+.t-s { fill: var(--muted); font-size: 11px; }
+.t-b { fill: currentColor; font-size: 13px; font-weight: 500; }
+.t-mic { fill: var(--mic); font-size: 11px; letter-spacing: .06em; }
+.t-amp { fill: var(--amp); font-size: 11px; letter-spacing: .06em; }
+.t-good { fill: var(--good); font-size: 12px; font-weight: 500; }
+.t-bad { fill: var(--bad); font-size: 12px; font-weight: 500; }
+.spk { fill: var(--panel); stroke: currentColor; stroke-width: 1.4; }
+.dash { stroke-dasharray: 4 4; }
+.pos { fill: none; stroke: var(--pos); stroke-width: 1.6; }
+.neg { fill: none; stroke: var(--neg); stroke-width: 1.6; }
+.t-pos { fill: var(--pos); font-size: 10px; }
+.t-warn { fill: var(--bad); font-size: 10px; }
+.res-mic { fill: var(--panel); stroke: var(--mic); stroke-width: 1.6; }
+.res { fill: var(--panel); stroke: currentColor; stroke-width: 1.4; }
+.dot { fill: currentColor; }
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+td.pin { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chip { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.mic { color: var(--mic); } .chip.amp { color: var(--amp); } .chip.off { color: var(--muted); }
+.notes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.notes > div { min-width: 0; }
+.notes h3 { font-size: 15px; margin: 0 0 4px; }
+.notes p { color: var(--fg); font-size: 14px; }
+.warn { color: var(--bad); font-weight: 500; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Bench rig · as wired 26 Nov 2026 · commit c3e2b3f</span>
+    <h1>Sonar Rig Wiring</h1>
+    <p>Teensy 4.0, two SPH0641 PDM mics and two MAX98357A amps on the breadboard. The mics and the amps now run from two separate clock outputs of the Teensy.</p>
+  </header>
+
+  <section class="sheet">
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1100 830" role="img" aria-label="Complete wiring: Teensy 3V and GND feed the 3.3 V and ground rails; pin 21 clocks both mics through 47 ohm each; mic data returns on pins 6 and 8; mics have SEL and GND to ground; pins 4, 3, 2 carry BCLK, LRC and DIN to both amps; amp A SD to 3.3 V, GAIN through 100k to 3.3 V, outputs to the good speaker; amp B SD from a 22k over 10k divider, GAIN through 100k to 3.3 V, no speaker."><defs><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah-mic"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah-amp"/></marker></defs><rect class="region-mic" x="290" y="56" width="790" height="284" rx="10"/>
+<text class="t-mic" x="306" y="78">MIC SIDE · SAI1 · 3.2 MHz</text>
+<rect class="region-amp" x="290" y="356" width="790" height="444" rx="10"/>
+<text class="t-amp" x="306" y="378">AMP SIDE · SAI2 · BCLK 3.2 MHz · LRC 100 kHz</text>
+<rect class="box" x="40" y="40" width="200" height="760" rx="6"/>
+<text class="t-b" x="140" y="66" text-anchor="middle">Teensy 4.0</text>
+<text class="t-s" x="140" y="84" text-anchor="middle">USB ⇄ Mac</text>
+<text class="t" x="228" y="104" text-anchor="end">3V</text>
+<text class="t" x="228" y="129" text-anchor="end">21 · mic BCLK</text>
+<text class="t" x="228" y="169" text-anchor="end">6 · mic 1 DATA</text>
+<text class="t" x="228" y="289" text-anchor="end">8 · mic 2 DATA</text>
+<text class="t" x="228" y="424" text-anchor="end">4 · amp BCLK</text>
+<text class="t" x="228" y="454" text-anchor="end">3 · amp LRC</text>
+<text class="t" x="228" y="484" text-anchor="end">2 · amp DIN</text>
+<text class="t-s" x="228" y="560" text-anchor="end">7 · empty</text>
+<text class="t-s" x="228" y="585" text-anchor="end">20 · empty</text>
+<text class="t" x="228" y="774" text-anchor="end">GND</text>
+<path class="pos" d="M240,100 L262,100"/>
+<path class="pos" d="M262,100 V86 M254,86 H270"/>
+<text class="t-pos" x="262" y="82" text-anchor="middle">3.3V</text>
+<path class="neg" d="M240,770 L262,770"/>
+<path class="neg" d="M262,770 V780 M253,780 H271 M256,784 H268 M259,788 H265"/>
+<path class="wire w-mic" d="M240,125 L340,125"/>
+<circle class="dot-mic" cx="300" cy="125" r="3.5"/>
+<rect class="res-mic" x="340" y="120" width="50" height="10" rx="1.5"/>
+<text class="t" x="365" y="113" text-anchor="middle">47 Ω</text>
+<path class="wire w-mic" d="M390,125 H600" marker-end="url(#am)"/>
+<path class="wire w-mic" d="M300,125 V245 H340"/>
+<rect class="res-mic" x="340" y="240" width="50" height="10" rx="1.5"/>
+<text class="t" x="365" y="233" text-anchor="middle">47 Ω</text>
+<path class="wire w-mic" d="M390,245 H600" marker-end="url(#am)"/>
+<text class="t-s" x="495" y="118" text-anchor="middle">~1 m braided</text>
+<text class="t-s" x="495" y="238" text-anchor="middle">~1 m+ straight</text>
+<path class="wire w-mic" d="M600,165 H240" marker-end="url(#am)"/>
+<path class="wire w-mic" d="M600,285 H240" marker-end="url(#am)"/>
+<rect class="box" x="600" y="100" width="160" height="90" rx="6"/>
+<text class="t-b" x="680" y="94" text-anchor="middle">Mic 1 · SPH0641</text>
+<text class="t" x="610" y="129">CLK</text>
+<text class="t" x="610" y="169">DATA</text>
+<text class="t" x="750" y="122" text-anchor="end">3.3</text>
+<text class="t" x="750" y="149" text-anchor="end">GND</text>
+<text class="t" x="750" y="176" text-anchor="end">SEL</text>
+<path class="pos" d="M760,118 L800,118"/>
+<path class="pos" d="M800,118 V104 M792,104 H808"/>
+<text class="t-pos" x="800" y="100" text-anchor="middle">3.3V</text>
+<path class="neg" d="M760,145 L840,145"/>
+<path class="neg" d="M840,145 V155 M831,155 H849 M834,159 H846 M837,163 H843"/>
+<path class="neg" d="M760,172 L880,172"/>
+<path class="neg" d="M880,172 V182 M871,182 H889 M874,186 H886 M877,190 H883"/>
+<rect class="box" x="600" y="220" width="160" height="90" rx="6"/>
+<text class="t-b" x="680" y="214" text-anchor="middle">Mic 2 · SPH0641</text>
+<text class="t" x="610" y="249">CLK</text>
+<text class="t" x="610" y="289">DATA</text>
+<text class="t" x="750" y="242" text-anchor="end">3.3</text>
+<text class="t" x="750" y="269" text-anchor="end">GND</text>
+<text class="t" x="750" y="296" text-anchor="end">SEL</text>
+<path class="pos" d="M760,238 L800,238"/>
+<path class="pos" d="M800,238 V224 M792,224 H808"/>
+<text class="t-pos" x="800" y="220" text-anchor="middle">3.3V</text>
+<path class="neg" d="M760,265 L840,265"/>
+<path class="neg" d="M840,265 V275 M831,275 H849 M834,279 H846 M837,283 H843"/>
+<path class="neg" d="M760,292 L880,292"/>
+<path class="neg" d="M880,292 V302 M871,302 H889 M874,306 H886 M877,310 H883"/>
+<text class="t-s" x="904" y="190">SEL → GND: mic sends</text>
+<text class="t-s" x="904" y="204">data on the falling edge</text>
+<path class="wire w-amp" d="M240,420 H600" marker-end="url(#aa)"/>
+<path class="wire w-amp" d="M240,450 H600" marker-end="url(#aa)"/>
+<path class="wire w-amp" d="M240,480 H600" marker-end="url(#aa)"/>
+<path class="wire w-amp" d="M520,420 V630 H600" marker-end="url(#aa)"/>
+<path class="wire w-amp" d="M540,450 V660 H600" marker-end="url(#aa)"/>
+<path class="wire w-amp" d="M560,480 V690 H600" marker-end="url(#aa)"/>
+<circle class="dot-amp" cx="520" cy="420" r="3.5"/>
+<circle class="dot-amp" cx="540" cy="450" r="3.5"/>
+<circle class="dot-amp" cx="560" cy="480" r="3.5"/>
+<rect class="box" x="600" y="390" width="160" height="175" rx="6"/>
+<text class="t-b" x="680" y="384" text-anchor="middle">Amp A · MAX98357A</text>
+<text class="t" x="610" y="424">BCLK</text>
+<text class="t" x="610" y="454">LRC</text>
+<text class="t" x="610" y="484">DIN</text>
+<text class="t" x="750" y="414" text-anchor="end">VIN</text>
+<text class="t" x="750" y="439" text-anchor="end">SD</text>
+<text class="t" x="750" y="480" text-anchor="end">GAIN</text>
+<text class="t" x="750" y="514" text-anchor="end">OUT+</text>
+<text class="t" x="750" y="534" text-anchor="end">OUT−</text>
+<text class="t" x="750" y="556" text-anchor="end">GND</text>
+<path class="pos" d="M760,410 L800,410"/>
+<path class="pos" d="M800,410 V396 M792,396 H808"/>
+<text class="t-pos" x="800" y="392" text-anchor="middle">3.3V</text>
+<path class="pos" d="M760,435 L860,435"/>
+<path class="pos" d="M860,435 V421 M852,421 H868"/>
+<text class="t-pos" x="860" y="417" text-anchor="middle">3.3V</text>
+<text class="t-s" x="872" y="439">SD at 3.3 V = left channel</text>
+<path class="wire" d="M760,476 L820,476"/>
+<rect class="res" x="820" y="471" width="50" height="10" rx="1.5"/>
+<path class="wire" d="M870,476 L900,476"/>
+<path class="pos" d="M900,476 V462 M892,462 H908"/>
+<text class="t-pos" x="900" y="458" text-anchor="middle">3.3V</text>
+<text class="t-s" x="845" y="467" text-anchor="middle">100 kΩ</text>
+<path class="wire" d="M760,510 L1000,510"/>
+<path class="wire" d="M760,530 L1000,530"/>
+<rect class="spk" x="1000" y="504" width="12" height="32"/><polygon class="spk" points="1012,504 1038,490 1038,550 1012,536"/>
+<text class="t" x="1019" y="566" text-anchor="middle">good speaker</text>
+<text class="t-s" x="1019" y="580" text-anchor="middle">16 Ω</text>
+<text class="t-warn" x="880" y="524" text-anchor="middle">never to GND</text>
+<path class="neg" d="M760,552 L800,552"/>
+<path class="neg" d="M800,552 V562 M791,562 H809 M794,566 H806 M797,570 H803"/>
+<rect class="box" x="600" y="600" width="160" height="180" rx="6"/>
+<text class="t-b" x="680" y="594" text-anchor="middle">Amp B · MAX98357A</text>
+<text class="t" x="610" y="634">BCLK</text>
+<text class="t" x="610" y="664">LRC</text>
+<text class="t" x="610" y="694">DIN</text>
+<text class="t" x="750" y="619" text-anchor="end">VIN</text>
+<text class="t" x="750" y="654" text-anchor="end">SD</text>
+<text class="t" x="750" y="716" text-anchor="end">GAIN</text>
+<text class="t" x="750" y="739" text-anchor="end">OUT+</text>
+<text class="t" x="750" y="754" text-anchor="end">OUT−</text>
+<text class="t" x="750" y="769" text-anchor="end">GND</text>
+<path class="pos" d="M760,615 L800,615"/>
+<path class="pos" d="M800,615 V601 M792,601 H808"/>
+<text class="t-pos" x="800" y="597" text-anchor="middle">3.3V</text>
+<path class="wire" d="M760,650 L860,650"/>
+<circle class="dot" cx="860" cy="650" r="3.5"/>
+<path class="wire" d="M860,650 L880,650"/>
+<rect class="res" x="880" y="645" width="50" height="10" rx="1.5"/>
+<path class="wire" d="M930,650 L960,650"/>
+<path class="pos" d="M960,650 V636 M952,636 H968"/>
+<text class="t-pos" x="960" y="632" text-anchor="middle">3.3V</text>
+<text class="t-s" x="974" y="654">22 kΩ to 3.3 V</text>
+<path class="wire" d="M860,650 V675 H880"/>
+<rect class="res" x="880" y="670" width="50" height="10" rx="1.5"/>
+<path class="wire" d="M930,675 L960,675"/>
+<path class="neg" d="M960,675 V685 M951,685 H969 M954,689 H966 M957,693 H963"/>
+<text class="t-s" x="974" y="680">10 kΩ to GND</text>
+<text class="t-s" x="764" y="644">≈0.97 V = right</text>
+<path class="wire" d="M760,712 L820,712"/>
+<rect class="res" x="820" y="707" width="50" height="10" rx="1.5"/>
+<path class="wire" d="M870,712 L900,712"/>
+<path class="pos" d="M900,712 V698 M892,698 H908"/>
+<text class="t-pos" x="900" y="694" text-anchor="middle">3.3V</text>
+<text class="t-s" x="845" y="703" text-anchor="middle">100 kΩ</text>
+<path class="wire dash" d="M760,735 H800"/>
+<path class="wire dash" d="M760,750 H800"/>
+<text class="t-s" x="808" y="746">empty · speaker 2 later</text>
+<path class="neg" d="M760,765 L830,765"/>
+<path class="neg" d="M830,765 V775 M821,775 H839 M824,779 H836 M827,783 H833"/></svg>
+      </div>
+      <figcaption>Every connection on the breadboard. Arrows show signal direction: clocks go out to the mics, mic data comes back. The <span style="color:var(--pos)">3.3V</span> symbol means the red rail (fed by the Teensy 3V pin), and the ground symbol means the blue rail. Resistors are shown at their design values (100 kΩ GAIN, 22k/10k SD divider). The bench currently uses kit-part combinations close to these: GAIN A 101.2 kΩ, GAIN B 98.5 kΩ, SD divider 22k / 10.8k, which will be swapped for single resistors. Pin positions are schematic, not the physical layout of the board.</figcaption>
+    </figure>
+  </section>
+
+  <section class="sheet">
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 960 230" role="img" aria-label="Before: one clock on pin 21 fed both the long mic wires and the amps, and the amps muted. After: pin 21 feeds only the mics and pins 4, 3, 2 feed only the amps; the speaker plays and both mics are clean.">
+        <defs>
+          <marker id="ak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <text class="t-b" x="20" y="26">Before · one clock for everything</text>
+        <rect class="box" x="20" y="60" width="90" height="120" rx="6"/>
+        <text class="t" x="65" y="124" text-anchor="middle">Teensy</text>
+        <path class="wire" d="M110,120 H200"/>
+        <circle cx="200" cy="120" r="3.5" fill="currentColor"/>
+        <text class="t-s" x="155" y="112" text-anchor="middle">pin 21</text>
+        <path class="wire w-mic" d="M200,120 V75 H300" marker-end="url(#ak)"/>
+        <path class="wire w-amp" d="M200,120 V165 H300" marker-end="url(#ak)"/>
+        <rect class="box" x="300" y="50" width="140" height="50" rx="6"/>
+        <text class="t" x="370" y="72" text-anchor="middle">2 mics</text>
+        <text class="t-s" x="370" y="88" text-anchor="middle">~2 m of wire</text>
+        <rect class="box" x="300" y="140" width="140" height="50" rx="6"/>
+        <text class="t" x="370" y="169" text-anchor="middle">Amps A + B</text>
+        <text class="t-bad" x="370" y="214" text-anchor="middle">amps muted · no sound</text>
+
+        <line x1="480" y1="20" x2="480" y2="215" stroke="var(--line)" stroke-width="1"/>
+
+        <text class="t-b" x="520" y="26">After · separate clocks</text>
+        <rect class="box" x="520" y="60" width="90" height="120" rx="6"/>
+        <text class="t" x="565" y="124" text-anchor="middle">Teensy</text>
+        <path class="wire w-mic" d="M610,75 H800" marker-end="url(#ak)"/>
+        <text class="t-s" x="705" y="67" text-anchor="middle">pin 21 → 47 Ω each</text>
+        <path class="wire w-amp" d="M610,165 H800" marker-end="url(#ak)"/>
+        <text class="t-s" x="705" y="157" text-anchor="middle">pins 4 / 3 / 2</text>
+        <rect class="box" x="800" y="50" width="140" height="50" rx="6"/>
+        <text class="t" x="870" y="80" text-anchor="middle">2 mics</text>
+        <rect class="box" x="800" y="140" width="140" height="50" rx="6"/>
+        <text class="t" x="870" y="169" text-anchor="middle">Amps A + B</text>
+        <text class="t-good" x="870" y="214" text-anchor="middle">plays · mics clean</text>
+      </svg>
+      </div>
+      <figcaption>The change that fixed the silent speaker. Echoes on the long mic wires spoiled the shared clock, and the amps muted themselves. Each side now has its own clock, and both clocks come from the same master oscillator, so playback and recording stay in lockstep.</figcaption>
+    </figure>
+  </section>
+
+  <section class="sheet">
+    <h2>Pin map</h2>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Teensy pin</th><th>Signal</th><th>Goes to</th><th>Clock side</th></tr></thead>
+      <tbody>
+        <tr><td class="pin">21</td><td>Mic clock, 3.2 MHz</td><td>47 Ω → mic 1 CLK · 47 Ω → mic 2 CLK</td><td><span class="chip mic">SAI1</span></td></tr>
+        <tr><td class="pin">6</td><td>Mic 1 data</td><td>Mic 1 DATA (braided bundle)</td><td><span class="chip mic">SAI1</span></td></tr>
+        <tr><td class="pin">8</td><td>Mic 2 data</td><td>Mic 2 DATA (straight bundle)</td><td><span class="chip mic">SAI1</span></td></tr>
+        <tr><td class="pin">4</td><td>Amp bit clock, 3.2 MHz</td><td>Amp A BCLK · Amp B BCLK</td><td><span class="chip amp">SAI2</span></td></tr>
+        <tr><td class="pin">3</td><td>Amp frame clock, 100 kHz</td><td>Amp A LRC · Amp B LRC</td><td><span class="chip amp">SAI2</span></td></tr>
+        <tr><td class="pin">2</td><td>Sound data</td><td>Amp A DIN · Amp B DIN</td><td><span class="chip amp">SAI2</span></td></tr>
+        <tr><td class="pin">3V</td><td>3.3 V</td><td>Red rail: both mics, amp VIN, amp A SD, 100 kΩ GAIN resistors, 22 kΩ SD divider top</td><td><span class="chip off">power</span></td></tr>
+        <tr><td class="pin">GND</td><td>Ground</td><td>Blue rail: both mics GND and SEL, amps GND, 10 kΩ SD divider bottom</td><td><span class="chip off">power</span></td></tr>
+        <tr><td class="pin">7, 20</td><td>(unused)</td><td>Nothing</td><td><span class="chip off">empty</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>Resistors</h2>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Where</th><th>Design value</th><th>On the bench now</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Pin 21 → mic 1 CLK</td><td class="pin">47 Ω</td><td class="pin">47 Ω</td><td>Damps clock echoes on the long mic wire</td></tr>
+        <tr><td>Pin 21 → mic 2 CLK</td><td class="pin">47 Ω</td><td class="pin">47 Ω</td><td>Same, for the longer straight bundle</td></tr>
+        <tr><td>Amp A GAIN → 3.3 V</td><td class="pin">100 kΩ</td><td class="pin">101.2 kΩ (150k∥150k + 5×5.6k)</td><td>Sets amp gain to 3 dB</td></tr>
+        <tr><td>Amp B GAIN → 3.3 V</td><td class="pin">100 kΩ</td><td class="pin">98.5 kΩ (kit combination)</td><td>Sets amp gain to 3 dB</td></tr>
+        <tr><td>Amp B SD → 3.3 V</td><td class="pin">22 kΩ</td><td class="pin">22 kΩ (4×5.6k)</td><td>Top of the divider that selects the right channel</td></tr>
+        <tr><td>Amp B SD → GND</td><td class="pin">10 kΩ</td><td class="pin">10.8 kΩ (2×5.6k)</td><td>Bottom of the divider, ≈0.97 V on SD</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>Rules and open items</h2>
+    <div class="notes">
+      <div><h3>Speaker wires</h3><p>Amp outputs go only to a speaker. <span class="warn">Never connect + or − to GND.</span> Keep speaker wires away from the mic bundles.</p></div>
+      <div><h3>Mic clock wires</h3><p>Reconnect mic CLK wires only with the USB unplugged. The mics must start at the slow clock first, and the code does that on every start.</p></div>
+      <div><h3>Volume</h3><p>10% start, 14% hard cap in code, 1 s fade-in, sound only while the Mac is recording.</p></div>
+      <div><h3>Open</h3><p>The heat-damaged speaker has not been re-tested since the clock fix. In the first sweep, output above about 30 kHz fell off steeply, which still needs a careful measurement.</p></div>
+    </div>
+  </section>
+</main>

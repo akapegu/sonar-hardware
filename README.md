@@ -16,6 +16,7 @@ sound on the test speaker (amp A) and a 15–45 kHz sweep.
 
 | Path | What it is |
 |---|---|
+| [docs/wiring.html](docs/wiring.html) | Complete wiring diagram (current bench: separate mic/amp clocks, every resistor, pin map) |
 | [docs/rig-handoff.md](docs/rig-handoff.md) | Parts, datasheet links, verified limits, wiring, signal plan, safety rules, bring-up order, open decisions |
 | [blink_test/](blink_test/) | Upload sanity check: blinks the onboard LED (pin 13 only) |
 | [mic_capture/](mic_capture/) | Experiment 1 firmware: clocks both PDM mics (1.6 MHz start-up, then 3.2 MHz) and streams raw bits over USB. Produces no audio. |
