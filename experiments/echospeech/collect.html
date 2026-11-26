@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EchoSpeech Collection</title>
+<style>
+:root {
+  --bg: #0f1412; --panel: #18201c; --fg: #e8efe9; --muted: #8fa097; --line: #2c3832;
+  --accent: #4fc7b5; --warn: #f0a24e; --bad: #ff8a80;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans);
+  display: grid; grid-template-rows: auto 1fr auto; padding: 20px max(16px, 3vw); gap: 16px; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+.meta { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+main { display: grid; place-items: center; text-align: center; }
+#word { font-size: clamp(56px, 14vw, 160px); font-weight: 700; letter-spacing: .01em; line-height: 1.05; }
+#word.gap { color: var(--line); }
+#sub { color: var(--muted); font-size: 18px; margin-top: 12px; min-height: 1.4em; }
+.bar { width: min(720px, 90vw); height: 10px; background: var(--panel); border-radius: 6px; overflow: hidden; margin: 28px auto 0; }
+.bar > div { height: 100%; width: 0; background: var(--accent); }
+.session { width: min(720px, 90vw); height: 4px; background: var(--panel); border-radius: 3px; overflow: hidden; margin: 10px auto 0; }
+.session > div { height: 100%; width: 0; background: var(--muted); }
+footer { color: var(--muted); font-size: 14px; display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+kbd { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg); font-family: inherit; }
+#start { display: grid; gap: 14px; justify-items: center; max-width: 640px; }
+#start p { margin: 0; color: var(--muted); line-height: 1.5; }
+input { background: var(--panel); border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 10px 12px; font-size: 16px; width: 260px; }
+button { background: var(--accent); color: #062a24; border: 0; border-radius: 8px; padding: 12px 22px; font-size: 16px; font-weight: 600; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.err { color: var(--bad); }
+.paused #word { color: var(--warn); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EchoSpeech collection · 31 commands × 4</h1>
+  <div class="meta" id="meta">not recording</div>
+</header>
+<main>
+  <section id="start">
+    <div style="font-size:28px;font-weight:600">Silent commands</div>
+    <p>Mouth each word silently, with lip movements similar to or slightly larger than speaking
+       out loud. No voice, no whisper. Keep your head still between words.</p>
+    <p>Each word stays up to 3 seconds. Press <kbd>space</kbd> as soon as you have finished,
+       <kbd>x</kbd> to repeat the word, <kbd>p</kbd> to pause. After the session, take the
+       glasses off and put them back on before starting the next one.</p>
+    <input id="name" placeholder="label (optional)" aria-label="session label">
+    <button id="go">Start session (Enter)</button>
+    <p id="err" class="err"></p>
+  </section>
+  <section id="run" hidden>
+    <div id="word" class="gap">·</div>
+    <div id="sub"></div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="session"><div id="sbar"></div></div>
+  </section>
+</main>
+<footer>
+  <span><kbd>space</kbd> next</span><span><kbd>x</kbd> repeat</span><span><kbd>p</kbd> pause</span>
+</footer>
+<script>
+const MAX_MS = 3000, GAP_MS = 700, LEAD_MS = 3000;
+const $ = id => document.getElementById(id);
+let state = "idle", total = 124, idx = 0, prompt = null, t0 = 0, timer = null, paused = false, startedAt = 0;
+
+async function post(path, body = {}) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+async function getState() { return (await fetch("/state")).json(); }
+
+function setBar(frac) { $("bar").style.width = (Math.max(0, Math.min(1, frac)) * 100) + "%"; }
+function setMeta() {
+  const left = Math.max(0, total - idx);
+  const per = idx > 0 ? (performance.now() - startedAt) / idx : 2500;
+  $("meta").textContent = `prompt ${Math.min(idx + 1, total)} / ${total} · about ${Math.ceil(left * per / 60000)} min left${paused ? " · paused" : ""}`;
+  $("sbar").style.width = (idx / total * 100) + "%";
+}
+
+async function startSession() {
+  $("err").textContent = "";
+  const r = await post("/start", { name: $("name").value });
+  total = r.total; idx = 0;
+  $("start").hidden = true; $("run").hidden = false;
+  $("word").textContent = "get ready"; $("word").className = "gap"; $("sub").textContent = "keep still";
+  state = "lead"; startedAt = performance.now() + LEAD_MS;
+  setTimeout(async () => {
+    const s = await getState();
+    if (s.error) { showError(s.error); return; }
+    showPrompt();
+  }, LEAD_MS);
+}
+
+async function showPrompt() {
+  const s = await getState();
+  if (s.error) { showError(s.error); return; }
+  if (s.prompt === null) { finish(); return; }
+  prompt = s.prompt; idx = s.idx; setMeta();
+  await post("/show");
+  $("word").textContent = prompt; $("word").className = ""; $("sub").textContent = "";
+  state = "prompt"; t0 = performance.now();
+  tick();
+}
+
+function tick() {
+  if (state !== "prompt") return;
+  const el = performance.now() - t0;
+  setBar(el / MAX_MS);
+  if (el >= MAX_MS) { endPrompt("next", "auto"); return; }
+  timer = requestAnimationFrame(tick);
+}
+
+async function endPrompt(kind, how) {
+  if (state !== "prompt") return;
+  state = "gap"; cancelAnimationFrame(timer); setBar(0);
+  const r = await post(kind === "redo" ? "/redo" : "/next", { how });
+  idx = r.idx; setMeta();
+  $("word").textContent = "·"; $("word").className = "gap";
+  $("sub").textContent = kind === "redo" ? "again" : "";
+  if (r.finished) { finish(); return; }
+  setTimeout(() => { if (!paused) showPrompt(); else state = "paused"; }, GAP_MS);
+}
+
+async function finish() {
+  state = "saving"; $("word").textContent = "saving…"; $("word").className = "gap"; $("sub").textContent = "";
+  const r = await post("/finish");
+  state = "idle";
+  $("word").textContent = "session saved";
+  $("sub").textContent = `${r.prompts} prompts · ${r.seconds.toFixed(0)} s · ${r.saved}. Take the glasses off, put them back on, then press Enter for the next session.`;
+  $("meta").textContent = "not recording";
+}
+
+function showError(e) {
+  state = "idle"; $("run").hidden = true; $("start").hidden = false;
+  $("err").textContent = "Recording error: " + e;
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && state === "idle") { e.preventDefault(); $("start").hidden ? (() => { $("run").hidden = true; $("start").hidden = false; startSession(); })() : startSession(); }
+  else if (e.key === " " && state === "prompt") { e.preventDefault(); endPrompt("next", "space"); }
+  else if ((e.key === "x" || e.key === "X") && state === "prompt") endPrompt("redo", "x");
+  else if (e.key === "p" || e.key === "P") {
+    if (state === "idle" || state === "lead" || state === "saving") return;
+    paused = !paused; document.body.classList.toggle("paused", paused); setMeta();
+    if (paused && state === "prompt") endPrompt("redo", "pause");
+    else if (!paused && state === "paused") showPrompt();
+    $("sub").textContent = paused ? "paused · press p to continue" : "";
+  }
+});
+$("go").addEventListener("click", startSession);
+</script>
+</body>
+</html>
