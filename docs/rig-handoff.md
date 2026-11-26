@@ -286,3 +286,23 @@ Decision so far: run amp A (18–28 kHz) at about 2%, which is inaudible and bel
 guideline near 20 kHz; amp B (29–39 kHz, inaudible, higher guideline limits above 25 kHz) can
 stay at 10%. Still to check: whether small movements show up in the differential profile at 2%.
 
+### On the glasses (2026-11-26, evening)
+
+- Mounted per the paper (speakers under one lens, mics under the other, lower rim), first on a
+  goggle frame, then on a slim frame. A loose pin 4 → amp A BCLK jumper silenced both amps once
+  (amp B's BCLK is chained from amp A's row).
+- Mic clock: on the glasses the **falling-edge** sampling works for both mics at drive strength
+  2–7; the rising edge only had a narrow window that moving the wires broke. sonispeech_mode now
+  defaults to DSE 3, falling edge.
+- The official alignment uses the mean over the recording; a large head movement can pull it off
+  the direct path. tools/sonispeech_capture.py now uses the median and aligns on the playing band.
+- Compared with dataset silent session 068 (same processing), our received 18–28 kHz is ~30 dB
+  weaker (rough: our PDM decimation vs their ADAU7002 scaling may differ by a few dB). Mouth
+  open/close and head movements are clearly visible; silent and spoken counting give only faint
+  echo patterns at 10–25% (the cap was raised to 40% for short stepwise tests at the user's
+  request; 20% already reaches the speaker's 0.4 V maximum). The level made no visible difference
+  from 10% to 25%. Spoken "s" sounds leak into the 18–28 kHz band as vertical streaks.
+- Conclusion: with OWR-0640T-16H speakers, fine articulation is near the noise. SoniSpeech used
+  OWR-05049T-38D. Next: run the trained model on these recordings; fallback demo = live echo
+  picture + mouth activity detection.
+

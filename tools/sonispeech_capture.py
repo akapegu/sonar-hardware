@@ -65,7 +65,10 @@ def record(seconds, chan, taper, level):
     return np.concatenate(chunks), np.array(stats)
 
 
-def echo_profiles(audio, tx_signals):
+def echo_profiles(audio, tx_signals, align=None):
+    """align: which tx bands to use for start-position detection (default all, as the official code).
+    With only one amp playing, aligning on that band alone stops the other band's leakage peak
+    from winning."""
     from scipy.signal import butter, lfilter
     n_tx, n_ch = len(tx_signals), audio.shape[1]
     filt = np.zeros((n_tx, n_ch, audio.shape[0]))
@@ -74,11 +77,14 @@ def echo_profiles(audio, tx_signals):
         for c in range(n_ch):
             filt[n, c] = lfilter(b, a, audio[:, c])
     L = min(FRAME * 100000, audio.shape[0] // (FRAME * n_tx * n_ch) * (FRAME * n_tx * n_ch))
-    sp = np.zeros((n_tx, n_ch, L))
-    for n, tx in enumerate(tx_signals):
+    align = list(range(n_tx)) if align is None else list(align)
+    sp = np.zeros((len(align), n_ch, L))
+    for k, n in enumerate(align):
         for c in range(n_ch):
-            sp[n, c] = np.correlate(filt[n, c][:L], tx, mode="full")[FRAME - 1:]
-    sp = np.mean(np.abs(sp.reshape(-1, FRAME)), axis=0)
+            sp[k, c] = np.correlate(filt[n, c][:L], tx_signals[n], mode="full")[FRAME - 1:]
+    # median over frames (the official code uses the mean): same result on steady recordings, but a
+    # short large movement can no longer pull the alignment away from the direct path
+    sp = np.median(np.abs(sp.reshape(-1, FRAME)), axis=0)
     start = (int(np.argmax(sp)) + FRAME - FRAME // 2) % FRAME
     filt = filt[:, :, start:]
     filt = filt[:, :, :filt.shape[2] - filt.shape[2] % FRAME].reshape(n_tx, n_ch, -1, FRAME)
@@ -129,7 +135,8 @@ def main():
         print(f"{name}: audible 0.2-15 kHz {lo:6.1f} dB | 18-28 kHz {b0:6.1f} dB | 29-39 kHz {b1:6.1f} dB"
               f" | rough SPL 18-20 kHz {spl(18000, 20000):5.1f} dB, 18-28 kHz {spl(18000, 28000):5.1f} dB")
 
-    prof, start = echo_profiles(audio.astype(float) * 32767 / 32768, read_tx())
+    align = {"A": [0], "B": [1]}.get(a.channels)  # one amp playing: align on its band only
+    prof, start = echo_profiles(audio.astype(float) * 32767 / 32768, read_tx(), align)
     np.save(out / f"sonispeech_{a.label}_profiles.npy", prof.astype(np.float32))
     mag = np.abs(prof)
     print(f"start_pos {start}, frames {prof.shape[2]} ({prof.shape[2] / 200:.1f} s)")

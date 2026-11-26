@@ -7,12 +7,13 @@
 //
 // Commands from the Mac (4 bytes each):
 //   'C', a, b, 0  enable amp A / amp B (1 = on). Default: A on, B off.
-//   'L', lo, hi, 0  level in tenths of a percent (e.g. 50 = 5.0%); can only go below 10%.
+//   'L', lo, hi, 0  level in tenths of a percent (e.g. 50 = 5.0%), clamped to LEVEL_CAP.
 //   'W', t, 0, 0  t = 1: 0.2 ms raised-cosine taper at each chirp edge (softer edges, less
 //                 audible); t = 0: exact official samples. Default 0.
 //
 // SAFETY (docs/rig-handoff.md, "Firmware safety rules"):
-//   * LEVEL_START = 10% of full scale; LEVEL_CAP = 14% is a compile-time hard limit, checked by
+//   * LEVEL_START = 10% of full scale; LEVEL_CAP (40% for the stepwise tests, normally 14%) is a
+//     compile-time hard limit, checked by
 //     static_assert, and every final sample is clamped to it. No runtime command changes it.
 //   * Sound plays ONLY while the Mac has the USB port open. Each channel ramps up from 0 over
 //     1.0 s and down over 0.1 s. After any reset or upload it starts silent.
@@ -38,9 +39,12 @@ static const uint8_t PIN_AMP_DIN = 2;    // SAI2_TX_DATA
 
 // ---- Output safety limits (compile-time only) ----
 static constexpr float LEVEL_START = 0.10f;  // playback level, fraction of full scale
-static constexpr float LEVEL_CAP = 0.14f;    // hard limit, never exceeded
+// Raised from 14% to 40% on 2026-11-26 at the user's explicit request, for short stepwise
+// tests on the glasses (the speakers are rated 5 mW; 40% is ~32 mW continuous, so tests stay
+// short with a touch check after each step). Put it back to 0.14f for normal use.
+static constexpr float LEVEL_CAP = 0.40f;    // hard limit, never exceeded
 static_assert(LEVEL_START > 0.0f && LEVEL_START <= LEVEL_CAP, "start level above cap");
-static_assert(LEVEL_CAP <= 0.14f, "cap must stay <= 14% (speaker rated 5 mW)");
+static_assert(LEVEL_CAP <= 0.40f, "experimental cap must stay <= 40%");
 static constexpr float RAMP_UP_S = 1.0f;     // >= 0.5 s required
 static constexpr float RAMP_DOWN_S = 0.1f;
 static_assert(RAMP_UP_S >= 0.5f, "soft start must be >= 0.5 s");
@@ -52,8 +56,8 @@ static constexpr uint32_t CHIRP_N = 500;     // 5 ms at 100 kHz
 static constexpr uint32_t TAPER_N = 20;      // 0.2 ms raised-cosine edges (optional)
 static float chirpA[2][CHIRP_N], chirpB[2][CHIRP_N];  // [0] exact, [1] tapered; peak 1.0
 static volatile uint8_t taper = 0, enA = 1, enB = 0;
-// Playback level set by the Mac with 'L', lo, hi, 0 (tenths of a percent, little-endian).
-// It can only LOWER the level: anything above LEVEL_START is clamped to LEVEL_START.
+// Playback level set by the Mac with 'L', lo, hi, 0 (tenths of a percent, little-endian),
+// clamped to LEVEL_CAP. Every new recording starts again at LEVEL_START (10%).
 static volatile float level_set = LEVEL_START;
 
 static volatile float level = 0.0f, levelB = 0.0f;        // current levels (ISR ramps them)
@@ -66,8 +70,10 @@ static volatile uint32_t tx_underruns = 0;
 // them at runtime with a 4-byte command: 'P', dse (1-7), speed (0-3), hys (0/1).
 // flags: bit0 = DATA hysteresis, bit1 = BCLK fast slew, bit2 = DATA keeper OFF,
 //        bit3 = sample DATA on the FALLING edge instead of the rising edge.
-static uint8_t pad_dse = 6, pad_speed = 2, pad_hys = 1;  // DSE 6 / SPEED 2 = chip default
-static uint8_t rx_falling = 0;
+// On the glasses (2026-11-26) the falling edge works for both mics at DSE 2-7; the rising edge
+// only had a narrow window that moving the mic wires broke. Default: DSE 3, falling edge.
+static uint8_t pad_dse = 3, pad_speed = 2, pad_hys = 1;
+static uint8_t rx_falling = 1;
 static void set_pads(uint8_t dse, uint8_t speed, uint8_t flags);
 
 static const uint32_t SAI_DIV_1M6 = 7;  // 1.6 MHz, standard mode (start-up)
@@ -208,7 +214,7 @@ static void sai_begin() {
 
   // Long (~1 m) mic wires: BCLK drive strength is tunable (see set_pads); DATA pins get
   // hysteresis and the keeper.
-  set_pads(pad_dse, pad_speed, pad_hys);
+  set_pads(pad_dse, pad_speed, (uint8_t)(pad_hys | (rx_falling << 3)));  // keep the default edge
 
   attachInterruptVector(IRQ_SAI1, sai_isr);
   NVIC_SET_PRIORITY(IRQ_SAI1, 64);
@@ -331,7 +337,7 @@ void loop() {
     if (c == 'W' && d <= 1) taper = d;
     if (c == 'L') {
       float v = (float)(d | (e << 8)) / 1000.0f;
-      level_set = v > LEVEL_START ? LEVEL_START : v;
+      level_set = v > LEVEL_CAP ? LEVEL_CAP : v;
     }
   }
 
@@ -344,7 +350,7 @@ void loop() {
     seq = 0;
   }
   was_open = open;
-  float lvl = level_set > LEVEL_START ? LEVEL_START : level_set;
+  float lvl = level_set > LEVEL_CAP ? LEVEL_CAP : level_set;
   level_target = (open && enA) ? lvl : 0.0f;   // sound only while the Mac has the port open
   level_targetB = (open && enB) ? lvl : 0.0f;
   if (!open && was_open_prev) { enA = 1; enB = 0; taper = 0; level_set = LEVEL_START; }  // defaults
