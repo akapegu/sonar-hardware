@@ -16,7 +16,7 @@ Limits marked ✔︎ were checked against the datasheets on 2026-11-25. The
 |---|---|---|---|
 | 1 | Teensy 4.0 (NXP i.MX RT1062, 600 MHz), headers pre-soldered | Generates chirps over I2S, clocks and reads the PDM mics, streams to the Mac over USB | 1 |
 | 2 | SmartElex I2S Audio Breakout, MAX98357A, screw terminal | Class D amp, one per speaker | 2 / 1 |
-| 3 | Ole Wolff OWR-0640T-16H, 16 Ω micro speaker, 6 mm diameter | Ultrasonic emitters | 2 / 2 (one spare has a heat-damaged side: use it as the test speaker) |
+| 3 | Ole Wolff OWR-0640T-16H, 16 Ω micro speaker, 6 mm diameter | Ultrasonic emitters | 2 / 2 (one of the two **soldered** speakers has a heat-damaged side: use it as the test speaker on amp A; the two spares are unsoldered) |
 | 4 | Elecrow "Digital MEMS Microphone" board, SKU CCB50641P (Knowles SPH0641LU4H-1, PDM, ultrasonic mode) | Echo receivers | 2 / 1 |
 | 5 | Resistors: 2 × 100 kΩ (GAIN), 22 kΩ + 10 kΩ (amp B SD divider), or 1 × 220 kΩ instead of the divider | Gain and channel select | — |
 | 6 | Capacitors: 1 × 10–100 µF electrolytic (3.3 V rail bulk), 0.1 µF ceramics if the mic boards lack them | Decoupling | — |
@@ -123,7 +123,7 @@ Mics (both):
 2. Soft start: ramp amplitude from 0 over ≥ 0.5 s at power-up and after any restart.
 3. Window each chirp's edges (short fade-in and fade-out) and keep the waveform zero-mean (no DC
    into the speaker).
-4. First run on the heat-damaged spare speaker only.
+4. First run on the heat-damaged (soldered) test speaker only.
 5. No speaker connected until both amps' SD voltages are measured (A ≈ 3.3 V, B ≈ 0.97 V or
    ≈ 1.06 V with the 220 kΩ option).
 6. Mic start-up order: standard-mode clock first, ultrasonic second (see the signal plan).
