@@ -95,6 +95,31 @@ def split_bands_paths():
     fig.savefig(IMG / "split_bands_4paths.png", dpi=72, facecolor="white")
 
 
+def split_bands_zoom(t0=9.0, t1=13.5):
+    """4.5 s of the silent counting, model crop only, each path standardised (±3 sigma)."""
+    prof = np.load(CAP / "sb_sb_quiet1_profiles.npy")
+    E = enhanced_diff(prof)
+    t = 1.2 + np.arange(prof.shape[2]) / 200
+    sel = (t >= t0) & (t < t1)
+    names = ["s0m1", "s0m2", "s1m1", "s1m2"]
+    fig, ax = plt.subplots(4, 1, figsize=(11, 7.2), constrained_layout=True, sharex=True)
+    for r, (s, c) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
+        full = E[s, c][:, 226:306]
+        z = (full - full.mean()) / full.std()
+        ax[r].imshow(z[sel].T, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-3, vmax=3,
+                     extent=[0, t1 - t0, 226, 306], interpolation="nearest")
+        ax[r].set_yticks([226, 306])
+        ax[r].set_ylabel(names[r], rotation=0, labelpad=22, color=INK2, va="center")
+        for sp in ax[r].spines.values():
+            sp.set_visible(False)
+        ax[r].tick_params(colors=INK2)
+    ax[-1].set_xlabel(f"seconds  ·  {t0:.1f}–{t1:.1f} s of the recording  ·  4 paths × 80 range bins  ·  "
+                      "colour = standardised value, ±3σ", color=INK2)
+    fig.suptitle("Silent counting (split bands 18–24 / 25–31 kHz, enhanced echo profiles)",
+                 x=0.02, ha="left", fontsize=12, fontweight="bold", color=INK)
+    fig.savefig(IMG / "split_bands_zoom.png", dpi=110, facecolor="white")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     a = ap.parse_args()
@@ -102,5 +127,6 @@ if __name__ == "__main__":
     response()
     signal_plans()
     split_bands_paths()
+    split_bands_zoom()
     for p in sorted(IMG.glob("*.png")):
         print(p.relative_to(ROOT), f"{p.stat().st_size // 1024} KB")
