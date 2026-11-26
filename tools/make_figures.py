@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate the README figures in docs/img/ from local recordings in captures/.
 
-    .venv/bin/python tools/make_figures.py [--dataset <SoniSpeech silent session audio.wav>]
+    .venv/bin/python tools/make_figures.py
 """
 import argparse
 import sys
@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sonispeech_capture import echo_profiles, enhanced_diff, read_tx  # noqa: E402
+from sonispeech_capture import enhanced_diff  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CAP, IMG = ROOT / "captures", ROOT / "docs" / "img"
@@ -41,59 +41,66 @@ def response():
     fig.savefig(IMG / "response_15_45k.png", dpi=90)
 
 
-def load_wav(p, t0=0.0, dur=None):
-    with wave.open(str(p)) as w:
-        fs = w.getframerate()
-        w.setpos(int(t0 * fs))
-        n = w.getnframes() - int(t0 * fs) if dur is None else int(dur * fs)
-        return np.frombuffer(w.readframes(n), "<i2").reshape(-1, 2) / 32768
+INK, INK2, GRID = "#1f2328", "#59636e", "#e6e8eb"
 
 
-def glasses(dataset):
-    prof = np.load(CAP / "sonispeech_nf6_silent20s_profiles.npy")
-    rows = [("Official differential profile (what the model reads)", np.diff(np.abs(prof[0, 0]), axis=0)),
-            ("Enhanced: 4-frame average, 50 ms difference", enhanced_diff(prof[0, 0])[1:])]
-    if dataset:
-        ds = load_wav(dataset, 60, 25)
-        pd, _ = echo_profiles(ds * 32767 / 32768, read_tx())
-        rows.insert(0, ("SoniSpeech dataset, silent session (official differential)", np.diff(np.abs(pd[0, 0]), axis=0)))
-    fig, ax = plt.subplots(len(rows), 1, figsize=(10, 2.6 * len(rows)), constrained_layout=True)
-    for a, (title, d) in zip(ax, rows):
-        z = d[:, 180:360].T
-        v = np.percentile(np.abs(z), 99.5)
-        x0 = 0.0 if "dataset" in title else 1.2
-        a.imshow(z, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-v, vmax=v,
-                 extent=[x0, x0 + z.shape[1] / 200, 180, 360])
-        a.axhline(226, color="g", lw=.6)
-        a.axhline(306, color="g", lw=.6)
-        if "dataset" not in title:
-            for x in (6.2, 25.8):
-                a.axvline(x, color="k", lw=.8, ls="--")
-        a.set(title=title, ylabel="range bin")
-    ax[-1].set_xlabel("s (ours: dashed = start / stop of silent counting; green = model crop 226-306)")
-    fig.savefig(IMG / "silent_speech_glasses.png", dpi=80)
+def signal_plans():
+    """Back-to-back enhanced speech contrast per path (values from experiments/*/README.md)."""
+    paths = ["spk 0 → mic 1", "spk 0 → mic 2", "spk 1 → mic 1", "spk 1 → mic 2"]
+    modes = [("Official 18–28 / 29–39 kHz", [9.9, 10.0, -0.3, 0.0], "#257de0"),
+             ("Take turns, both 18–28 kHz", [6.0, 5.4, 2.1, 1.5], "#f47230"),
+             ("Split 18–24 / 25–31 kHz", [11.2, 10.0, 8.2, 6.9], "#00b894")]
+    fig, ax = plt.subplots(figsize=(9, 3.8), constrained_layout=True)
+    x, w = np.arange(4), 0.26
+    for i, (name, vals, col) in enumerate(modes):
+        xs = x + (i - 1) * (w + 0.01)
+        ax.bar(xs, vals, w, color=col, label=name, edgecolor="white", linewidth=2)
+        for xx, v in zip(xs, vals):
+            ax.text(xx, v + (0.3 if v >= 0 else -0.9), f"{v:+.1f}", ha="center", fontsize=8, color=INK)
+    ax.axhline(0, color=INK2, lw=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(paths, color=INK)
+    ax.set_ylabel("speech contrast, dB\n(speaking vs still)", color=INK2)
+    ax.yaxis.grid(True, color=GRID)
+    ax.set_axisbelow(True)
+    ax.set_ylim(-2, 13.5)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, fontsize=9, loc="upper right", labelcolor=INK)
+    ax.set_title("Signal plans compared back to back on the glasses (10 s silent counting, enhanced processing)",
+                 color=INK, fontsize=10.5, loc="left")
+    fig.savefig(IMG / "signal_plans.png", dpi=90, facecolor="white")
 
 
-def motion():
-    prof = np.load(CAP / "sonispeech_motion_02b_profiles.npy")
-    z = np.diff(np.abs(prof[0, 1]), axis=0)[:, 200:450].T
-    v = np.percentile(np.abs(z), 99.5)
-    fig, ax = plt.subplots(figsize=(10, 2.8), constrained_layout=True)
-    ax.imshow(z, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-v, vmax=v, extent=[1.2, 1.2 + z.shape[1] / 200, 200, 450])
-    for x in (7.6, 13.2):
-        ax.axvline(x, color="k", lw=.8, ls="--")
-    ax.set(title="Bench: hand moving 10-20 cm above the rig at 2% level (inaudible), 18-28 kHz, mic 2",
-           xlabel="s (dashed: move / stop)", ylabel="range bin")
-    fig.savefig(IMG / "hand_motion_2pct.png", dpi=80)
+def split_bands_paths():
+    prof = np.load(CAP / "sb_sb_quiet1_profiles.npy")
+    E = enhanced_diff(prof)
+    names = ["speaker 0 (18–24 kHz) → mic 1", "speaker 0 (18–24 kHz) → mic 2",
+             "speaker 1 (25–31 kHz) → mic 1", "speaker 1 (25–31 kHz) → mic 2"]
+    vals = [14.8, 10.9, 9.2, 6.0]
+    fig, ax = plt.subplots(4, 1, figsize=(10, 8.6), constrained_layout=True, sharex=True)
+    for r, ((s, c), nm, v) in enumerate(zip([(0, 0), (0, 1), (1, 0), (1, 1)], names, vals)):
+        z = E[s, c][1:, 180:360].T
+        m = np.percentile(np.abs(z), 99.5)
+        ax[r].imshow(z, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-m, vmax=m,
+                     extent=[1.2, 1.2 + z.shape[1] / 200, 180, 360])
+        for y in (226, 306):
+            ax[r].axhline(y, color="#2da44e", lw=.7)
+        for xx in (7.5, 18.5):
+            ax[r].axvline(xx, color=INK, lw=.8, ls="--")
+        ax[r].set_title(f"{nm}  ·  contrast {v:+.1f} dB", loc="left", fontsize=10, color=INK)
+        ax[r].set_ylabel("range bin", color=INK2)
+    ax[-1].set_xlabel("s  (dashed: silent counting 1–10, detected; green: model crop 226–306)", color=INK2)
+    fig.suptitle("Silent speech on the glasses: split bands, both speakers, both mics (enhanced echo profiles)",
+                 fontsize=11, color=INK, x=0.01, ha="left")
+    fig.savefig(IMG / "split_bands_4paths.png", dpi=72, facecolor="white")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", default=None)
     a = ap.parse_args()
     IMG.mkdir(parents=True, exist_ok=True)
     response()
-    glasses(a.dataset)
-    motion()
+    signal_plans()
+    split_bands_paths()
     for p in sorted(IMG.glob("*.png")):
         print(p.relative_to(ROOT), f"{p.stat().st_size // 1024} KB")
