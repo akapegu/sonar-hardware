@@ -238,9 +238,28 @@ relative to 18–20 kHz (SNR after averaging 37–68 dB in 15–42 kHz):
 | mic 2 | +4.5 | 0 | −3.2 to +0.1 | −10 to −15 | −24 to −26 | −30 | −31 to −33 | −37 | −44 |
 
 SoniSpeech bands: 18–28 kHz averages −3 to −4 dB, 29–39 kHz averages −26 to −27 dB, so the
-upper band is about 23–24 dB weaker. The drop is far larger than the amp filter alone (−3 dB at
-31 kHz), so the speaker model dominates. The 14% cap leaves only +3 dB of headroom, and the slope
+upper band is about 23–24 dB weaker. Whether the amp or the speaker causes the drop was settled
+by the direct-drive test below. The 14% cap leaves only +3 dB of headroom, and the slope
 inside 29–39 kHz is about 23 dB, so pre-emphasis cannot flatten it. Next: build SoniSpeech mode
 with the original bands and judge the 29–39 kHz echo profiles directly before changing bands or
 parts.
+
+### Speaker alone vs through the amp (2026-11-26)
+
+`tone_direct/` drives the same speaker straight from Teensy pins 14/15 through 1.5 kΩ (opposite
+phase, no DC, ~0.1 mW), bypassing the amp; `tools/tone_direct_test.py` compares it with the amp
+sweep. Relative to 20 kHz (mic 1 / mic 2):
+
+| Tone | Speaker alone | Through amp |
+|---|---|---|
+| 24 kHz | −0.7 / −2.3 | +2.0 / −0.2 |
+| 28 kHz | −15.6 / −12.9 | −10.8 / −14.2 |
+| 32 kHz | −26.4 / −27.7 | −24.9 / −23.4 |
+| 36 kHz | −22.2 / −24.6 | −28.4 / −27.3 |
+| 40 kHz | −23.5 / −19.3 | −36.1 / −35.2 |
+
+Verdict: the **speaker** causes most of the 29–39 kHz loss (13–28 dB, with a dip near 32 kHz);
+the amp filter only adds ~3–6 dB at 36 kHz and ~12–16 dB at 40 kHz. A better amp alone would not
+fix the band; a speaker designed for ultrasound would, ideally together with a 192 kHz-capable
+DAC/amp for the top few kHz. First check whether the current band still gives usable face echoes.
 
