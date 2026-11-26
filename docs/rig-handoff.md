@@ -221,5 +221,8 @@ no-speaker floor: 15–25 kHz about +20, 25–30 kHz +17, 30–32.5 kHz +11, 32.
 measurement (SNR limited, one position).
 
 The heat-damaged test speaker gave no sound in the earlier runs, but those were all with the
-muted amp; it has not been re-tested since the clock fix.
+muted amp. Re-tested after the clock fix: it plays, with nearly the same response as the good
+speaker (15–20 kHz about +20 to +24 dB above the floor, 30–35 kHz +6 to +9, 35–40 kHz about +2).
+Both soldered speakers work; the steep roll-off above 30 kHz looks like a property of this
+speaker model.
 
