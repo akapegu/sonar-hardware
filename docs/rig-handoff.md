@@ -263,3 +263,26 @@ the amp filter only adds ~3–6 dB at 36 kHz and ~12–16 dB at 40 kHz. A better
 fix the band; a speaker designed for ultrasound would, ideally together with a 192 kHz-capable
 DAC/amp for the top few kHz. First check whether the current band still gives usable face echoes.
 
+### SoniSpeech mode: first run and listening test (2026-11-26)
+
+`sonispeech_mode/` plays the dataset's own chirps (copied from the local dataset with
+`tools/make_tx_header.py` into a git-ignored header): amp A 18→28 kHz, amp B 29→39 kHz, 500
+samples each, back to back. `tools/sonispeech_capture.py` saves 100 kHz 2-channel int16 WAVs (the
+dataset format) and re-implements the official echo-profile steps. With amp A only, the direct
+path lands at bin ~246 (the dataset's is at 250) on both mics, and the mics see no extra energy
+below 15 kHz.
+
+Listening test, speaker held 2–3 cm from the ear, rough SPL at the mics (~8–10 cm, from the
+datasheet sensitivity; not calibrated for ultrasound):
+
+| Level | Heard | 18–20 kHz SPL | Direct path / background |
+|---|---|---|---|
+| 10% | faint noise | ~82 dB | ~30 dB |
+| 5% | extremely faint | ~76 dB | ~30 dB |
+| 2% | nothing | ~67 dB | ~29 dB |
+| 1% | – | ~61 dB | ~29 dB |
+
+Decision so far: run amp A (18–28 kHz) at about 2%, which is inaudible and below the ~75 dB
+guideline near 20 kHz; amp B (29–39 kHz, inaudible, higher guideline limits above 25 kHz) can
+stay at 10%. Still to check: whether small movements show up in the differential profile at 2%.
+
