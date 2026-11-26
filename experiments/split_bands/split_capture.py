@@ -5,6 +5,9 @@ Needs experiments/split_bands/split_bands.ino on the Teensy. Reuses tools/ helpe
 (echo profiles as the official code, with this experiment's chirps and band-pass ranges).
 
     .venv/bin/python experiments/split_bands/split_capture.py --label sb_test --test
+    .venv/bin/python experiments/split_bands/split_capture.py --label sb_q --auto -s 20
+        --auto: no spoken cues (they made the wearer react); the speaking stretch is found from
+        speaker 0 activity and compared with the quiet time before it.
 """
 import argparse
 import subprocess
@@ -68,6 +71,7 @@ def main():
     ap.add_argument("--level", type=float, default=10.0)
     ap.add_argument("--no-taper", dest="taper", action="store_false")
     ap.add_argument("--test", action="store_true")
+    ap.add_argument("--auto", action="store_true", help="no voice cues; detect the speaking stretch")
     a = ap.parse_args()
     if a.test:
         subprocess.Popen([sys.executable, "-c", "import time,subprocess;time.sleep(0.5);subprocess.run(['say','get ready']);"
@@ -100,26 +104,33 @@ def main():
     import matplotlib.pyplot as plt
     E = sc.enhanced_diff(prof)
     t = 1.2 + np.arange(prof.shape[2]) / 200
+    if a.auto:  # speaking stretch = where speaker-0 activity (1 s smoothed) exceeds 2.5x its 30th percentile
+        act = np.convolve(np.abs(E[0]).sum(axis=0)[:, 226:306].sum(1), np.ones(100) / 100, "same")
+        on = t[act > 2.5 * np.percentile(act, 30)]
+        t0, t1 = (on.min(), on.max()) if len(on) else (7.0, 15.0)
+        print(f"speaking detected {t0:.1f}-{t1:.1f} s")
     fig, ax = plt.subplots(4, 1, figsize=(12, 10), constrained_layout=True)
     row = []
     for r, (s, c) in enumerate([(0, 0), (0, 1), (1, 0), (1, 1)]):
         en = np.abs(E[s, c])[:, 226:306].sum(1)
         if a.test:
             row.append(20 * np.log10(en[(t >= 6.5) & (t < 15)].mean() / en[(t >= 2.5) & (t < 5)].mean()))
+        elif a.auto:
+            row.append(20 * np.log10(en[(t >= t0) & (t < t1)].mean() / en[(t >= 2) & (t < max(2.5, t0 - 0.5))].mean()))
         z = E[s, c][1:, 180:360].T
         v = np.percentile(np.abs(z), 99.5)
         ax[r].imshow(z, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-v, vmax=v,
                      extent=[1.2, 1.2 + z.shape[1] / 200, 180, 360])
         for y in (226, 306):
             ax[r].axhline(y, color="g", lw=.5)
-        if a.test:
-            for x in (5.6, 15.2):
+        if a.test or a.auto:
+            for x in ((5.6, 15.2) if a.test else (t0, t1)):
                 ax[r].axvline(x, color="k", lw=.8, ls="--")
         ax[r].set(title=f"split bands · speaker {s} ({BANDS[s][0] / 1e3:.0f}-{BANDS[s][1] / 1e3:.0f} kHz) -> mic {c + 1} · enhanced",
                   xlabel="s", ylabel="bin")
     png = out / f"sb_{a.label}_paths.png"
     fig.savefig(png, dpi=60)
-    if a.test:
+    if a.test or a.auto:
         print("enhanced speech contrast  " + "  ".join(f"s{s}m{c + 1} {v:+5.1f}" for (s, c), v in
                                                      zip([(0, 0), (0, 1), (1, 0), (1, 1)], row)) + " dB")
         subprocess.run(["open", str(png)])
