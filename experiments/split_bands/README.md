@@ -17,4 +17,15 @@ arduino-cli upload --fqbn teensy:avr:teensy40 -p usb:<id> experiments/split_band
 **Baseline** (official mode, same session, 10 s silent counting, enhanced contrast): speaker 0
 → mics +9.9 / +10.0 dB, speaker 1 (29–39 kHz) → mics −0.3 / −0.0 dB.
 
-**Results.** (after the test)
+**Results (2026-11-26).** Same session as the baseline, 10 s of silent counting, enhanced
+contrast (speaking vs still):
+
+| Mode | spk 0 → mic 1 | spk 0 → mic 2 | spk 1 → mic 1 | spk 1 → mic 2 |
+|---|---|---|---|---|
+| Official 18–28 / 29–39 kHz | +9.9 | +10.0 | −0.3 | −0.0 |
+| Take turns, both 18–28 kHz | +6.0 | +5.4 | +2.1 | +1.5 |
+| **Split 18–24 / 25–31 kHz** | **+11.2** | **+10.0** | **+8.2** | **+6.9** |
+
+Speaker 1 goes from no speech to a clear pattern, and speaker 0 loses nothing to the narrower band,
+so all four paths carry speech. **Decision: split bands for the demo data collection** (our own
+model; the official mode stays in `sonispeech_mode/` for dataset-matched work).
