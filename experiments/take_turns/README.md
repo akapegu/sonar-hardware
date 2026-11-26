@@ -28,4 +28,19 @@ arduino-cli upload  --fqbn teensy:avr:teensy40 -p usb:<id> experiments/take_turn
 enhanced contrast speaking vs still): speaker 0 → mics +10.4 / +9.4 dB, speaker 1 (29–39 kHz)
 → mics +4.7 / +4.7 dB.
 
-**Results.** (filled in after the test)
+**Results (2026-11-26).** Back to back in the same glasses position, 10 s of silent counting,
+enhanced contrast (speaking vs still), with speaker 1 freshly replaced by a spare:
+
+| Mode | spk 0 → mic 1 | spk 0 → mic 2 | spk 1 → mic 1 | spk 1 → mic 2 |
+|---|---|---|---|---|
+| Official (spk 1 on 29–39 kHz) | +9.9 | +10.0 | −0.3 | −0.0 |
+| Take turns (both on 18–28 kHz) | +6.0 | +5.4 | +2.1 | +1.5 |
+
+Take turns costs speaker 0 about 4 dB (it plays every other frame, so half the samples per
+path) and gains speaker 1 only about 2 dB; speaker 1's direct path is also weaker (14 vs 23 dB),
+so its position, not its band, limits it. **Decision: keep the official SoniSpeech mode** for
+data collection. Notes from the runs: the official per-window framing mixes the two speakers in
+take-turns mode, so `tdm_capture.py` correlates the whole signal first and places each speaker's
+first arrival at bin 100; a strong reflection about 1.5 ms after the direct path (≈25 cm) is
+often larger than the direct path; the re-soldered original speaker 1 crackled (vertical streaks
+across all bins) and was replaced.
