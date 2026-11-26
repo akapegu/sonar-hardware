@@ -128,6 +128,13 @@ static void sai_begin() {
   IOMUXC_SAI1_RX_DATA0_SELECT_INPUT = 2;
   IOMUXC_SAI1_RX_DATA1_SELECT_INPUT = 1;
 
+  // Long (~1 m) mic wires. Measured on the bench (tools/pad_scan.py): with a 47 ohm series
+  // resistor in mic 2's CLK wire, both mics are clean at BCLK drive strength 4 and 6; 6 has
+  // the most margin. DATA pins get hysteresis and the keeper.
+  CORE_PIN21_PADCONFIG = IOMUXC_PAD_DSE(6) | IOMUXC_PAD_SPEED(2);
+  CORE_PIN8_PADCONFIG = IOMUXC_PAD_HYS | IOMUXC_PAD_PKE;
+  CORE_PIN6_PADCONFIG = IOMUXC_PAD_HYS | IOMUXC_PAD_PKE;
+
   attachInterruptVector(IRQ_SAI1, sai_isr);
   NVIC_SET_PRIORITY(IRQ_SAI1, 64);
   NVIC_ENABLE_IRQ(IRQ_SAI1);

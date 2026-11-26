@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-HDR = struct.Struct("<4sIIIIIHHB3x")  # 32 bytes, matches mic_capture.ino
+HDR = struct.Struct("<4sIIIIIHHBBH")  # 32 bytes; last field = output level in 0.1% (speaker_sweep)
 MAGIC = b"SNR1"
 
 
@@ -46,13 +46,13 @@ def capture(port, seconds):
                 if len(buf) - i < HDR.size:
                     del buf[:i]
                     break
-                _, seq, us, tw, dw, fe, n, khz, nm = HDR.unpack_from(buf, i)
+                _, seq, us, tw, dw, fe, n, khz, nm, pad, lv = HDR.unpack_from(buf, i)
                 end = i + HDR.size + 2 * n
                 if len(buf) < end:
                     del buf[:i]
                     break
                 chunks.append(np.frombuffer(bytes(buf[i + HDR.size:end]), "<u2"))
-                stats.append((seq, us, tw, dw, fe, khz, nm))
+                stats.append((seq, us, tw, dw, fe, khz, nm, lv))
                 del buf[:end]
     if not stats:
         sys.exit("No packets received. Check that mic_capture.ino is uploaded.")
@@ -81,7 +81,7 @@ def main():
     print(f"Recording {a.seconds:g} s from {port} ...")
     words, st = capture(port, a.seconds)
 
-    seq, us, tw, dw, fe, khz, nm = st.T
+    seq, us, tw, dw, fe, khz, nm, lv = st.T
     n_mics = int(nm[-1])
     gaps = int(np.sum(np.diff(seq) != 1))
     dt = ((us[-1] - us[0]) % 2**32) / 1e6

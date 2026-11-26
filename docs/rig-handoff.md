@@ -179,3 +179,18 @@ the digital signal above the amplitude cap.
 - Amp B SD: documented the expected voltage (≈ 0.97 V) and the single-resistor alternative from
   the datasheet. Corrected the VIN/3V adjacency note.
 - Added decoupling capacitors to the parts and wiring.
+
+## Bench notes: long mic wires (2026-11-26)
+
+Both mics hang off ~1 m wire bundles (mic 1 braided, mic 2 straight and a bit longer) and share
+the 3.2 MHz BCLK on pin 21. With the clock wired straight to both, no single pin-21 drive
+strength worked for both mics: a strong clock rang on mic 2's straight bundle (it miscounted
+ticks), a weak one was too slow for mic 1's braided bundle. Moving the sampling edge did not
+help, which showed the problem was the clock at the far end, not data timing.
+
+Fix: a **47 Ω series resistor** from the Teensy pin 21 row to mic 2's CLK wire, placed at the
+Teensy end; mic 1's CLK stays direct. With it, both mics are clean (about −80 dB, 5–45 kHz,
+quiet room) at drive strength 6 (chip default, SPEED 2), stable over 10 s; strength 4 also
+works with less margin. Re-run `tools/pad_scan.py` (needs speaker_sweep, speaker disconnected)
+whenever the mic wiring changes, e.g. on the glasses.
+
