@@ -57,6 +57,23 @@ def model(n_classes):
     return m
 
 
+def augment_extra(x, rng):
+    """Re-wearing augmentation (beyond EchoSpeech): per-path gain +-3 dB, range shift +-2 bins,
+    speed x U(0.9, 1.1). x: (4, 80, t)."""
+    x = x * (10 ** (rng.uniform(-3, 3, size=(4, 1, 1)) / 20))
+    s = int(rng.integers(-2, 3))
+    if s:
+        x = np.roll(x, s, axis=1)
+        if s > 0:
+            x[:, :s] = 0
+        else:
+            x[:, s:] = 0
+    t = x.shape[2]
+    n = max(8, int(round(t * rng.uniform(0.9, 1.1))))
+    idx = np.clip(np.round(np.linspace(0, t - 1, n)).astype(int), 0, t - 1)
+    return x[:, :, idx]
+
+
 def train_model(train, classes, args, dev, seed):
     """Train on (clip, label) pairs; returns the net (eval mode) and the per-path input scale."""
     rng = np.random.default_rng(seed)
@@ -73,7 +90,8 @@ def train_model(train, classes, args, dev, seed):
     for ep in range(args.epochs):
         net.train()
         for b in np.array_split(rng.permutation(len(Xtr)), int(np.ceil(len(Xtr) / args.batch))):
-            xb = np.stack([fit_window(Xtr[i] / scale * rng.uniform(0.95, 1.05), rng) for i in b])
+            aug = (lambda x: augment_extra(x, rng)) if getattr(args, "aug", "echo") == "extra" else (lambda x: x)
+            xb = np.stack([fit_window(aug(Xtr[i] / scale * rng.uniform(0.95, 1.05)), rng) for i in b])
             xb = torch.from_numpy(xb).to(dev)
             loss = lossf(net(xb), torch.from_numpy(ytr[b]).to(dev))
             opt.zero_grad()
@@ -101,9 +119,11 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--aug", default="echo", choices=["echo", "extra"],
+                    help="echo: EchoSpeech's (placement, x0.95-1.05); extra: also gain, range shift, speed")
     ap.add_argument("--save", metavar="PATH", help="skip cross-validation; train on every session and save the model")
     args = ap.parse_args()
-    dev = "mps" if torch.backends.mps.is_available() else "cpu"
+    dev = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     sessions = load(args.person, args.mode)
     classes = sorted({str(y) for _, _, ys in sessions for y in ys})
     print(f"{len(sessions)} sessions, {sum(len(c) for _, c, _ in sessions)} clips, classes {classes}, device {dev}")

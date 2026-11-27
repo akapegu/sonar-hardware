@@ -1,0 +1,18 @@
+6 sessions (+0 new): s09  73.3%  s10  63.3%  s11  73.3%  s12  53.3%  (13 s)
+7 sessions (+1 new: s10) -> s09:  90.0%  (12 s)
+7 sessions (+1 new: s11) -> s10:  93.3%  (13 s)
+7 sessions (+1 new: s12) -> s11:  96.7%  (13 s)
+7 sessions (+1 new: s09) -> s12:  76.7%  (13 s)
+8 sessions (+2 new: s10 s11) -> s09:  93.3%  (14 s)
+8 sessions (+2 new: s11 s12) -> s10:  93.3%  (15 s)
+8 sessions (+2 new: s12 s09) -> s11:  93.3%  (15 s)
+8 sessions (+2 new: s09 s10) -> s12:  76.7%  (15 s)
+9 sessions (+3 new: s10 s11 s12) -> s09:  93.3%  (17 s)
+9 sessions (+3 new: s11 s12 s09) -> s10:  96.7%  (17 s)
+9 sessions (+3 new: s12 s09 s10) -> s11: 100.0%  (17 s)
+9 sessions (+3 new: s09 s10 s11) -> s12:  90.0%  (17 s)
+
+ 6 training sessions (0 from the new batch): mean  65.8%  [73 63 73 53]
+ 7 training sessions (1 from the new batch): mean  89.2%  [90 93 97 77]
+ 8 training sessions (2 from the new batch): mean  89.2%  [93 93 93 77]
+ 9 training sessions (3 from the new batch): mean  95.0%  [93 97 100 90]
