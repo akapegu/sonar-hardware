@@ -34,7 +34,7 @@ def load(person, mode):
         if json.load(open(sdir / "events.json")).get("practice"):
             continue
         d = np.load(f, allow_pickle=True)
-        sessions.append((sdir.name, list(d["clips"]), list(d["labels"])))
+        sessions.append((sdir.name, list(d["clips"]), [str(y) for y in d["labels"]]))
     return sessions
 
 
@@ -57,7 +57,8 @@ def model(n_classes):
     return m
 
 
-def run_fold(train, test, classes, args, dev, seed):
+def train_model(train, classes, args, dev, seed):
+    """Train on (clip, label) pairs; returns the net (eval mode) and the per-path input scale."""
     rng = np.random.default_rng(seed)
     torch.manual_seed(seed)
     cidx = {c: i for i, c in enumerate(classes)}
@@ -67,7 +68,7 @@ def run_fold(train, test, classes, args, dev, seed):
     net = model(len(classes)).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=1e-4)
     steps = args.epochs * int(np.ceil(len(Xtr) / args.batch))
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)  # noqa
     lossf = nn.CrossEntropyLoss(label_smoothing=0.1)
     for ep in range(args.epochs):
         net.train()
@@ -80,6 +81,12 @@ def run_fold(train, test, classes, args, dev, seed):
             opt.step()
             sched.step()
     net.eval()
+    return net, scale
+
+
+def run_fold(train, test, classes, args, dev, seed):
+    net, scale = train_model(train, classes, args, dev, seed)
+    cidx = {c: i for i, c in enumerate(classes)}
     with torch.no_grad():
         xt = torch.from_numpy(np.stack([fit_window(x.astype(np.float32) / scale) for x, _ in test])).to(dev)
         pred = net(xt).argmax(1).cpu().numpy()
@@ -94,11 +101,20 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--save", metavar="PATH", help="skip cross-validation; train on every session and save the model")
     args = ap.parse_args()
     dev = "mps" if torch.backends.mps.is_available() else "cpu"
     sessions = load(args.person, args.mode)
-    classes = sorted({y for _, _, ys in sessions for y in ys})
+    classes = sorted({str(y) for _, _, ys in sessions for y in ys})
     print(f"{len(sessions)} sessions, {sum(len(c) for _, c, _ in sessions)} clips, classes {classes}, device {dev}")
+    if args.save:
+        train = [(x, y) for _, c, l in sessions for x, y in zip(c, l)]
+        net, scale = train_model(train, classes, args, dev, args.seed)
+        torch.save(dict(state=net.cpu().state_dict(), scale=scale.astype(np.float32), classes=classes, T=T,
+                        mode=args.mode, sessions=[s for s, _, _ in sessions], person=args.person,
+                        epochs=args.epochs), args.save)
+        print(f"saved {args.save} (trained on {len(train)} clips from {[s for s, _, _ in sessions]})")
+        return
     conf = np.zeros((len(classes), len(classes)), int)
     accs = []
     for k, (name, clips, labels) in enumerate(sessions):

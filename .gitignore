@@ -22,3 +22,4 @@ captures/
 # Generated from the SoniSpeech dataset (not redistributed)
 sonispeech_mode/tx_chirps.h
 experiments/take_turns/tx_chirps.h
+models/

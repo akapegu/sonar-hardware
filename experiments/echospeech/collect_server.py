@@ -46,6 +46,7 @@ TRASH = OUT / "_trash"
 LEVEL_PERMILLE = 100  # 10%
 MAX_TAKE_S = 4.0
 COMMAND_SETS = {"all 31": ALL, **{k: v for k, v in COMMANDS.items()}}
+RECOG = None  # live_recog.Recognizer when --model is given
 
 
 def git_commit():
@@ -97,6 +98,11 @@ class Recorder:
         if self.thread:
             self.thread.join(timeout=5)
         return np.concatenate(self.chunks) if self.chunks else np.zeros(0, np.uint16)
+
+    def words_so_far(self):
+        with self.lock:
+            chunks = list(self.chunks)
+        return np.concatenate(chunks) if chunks else np.zeros(0, np.uint16)
 
     def now_sample(self):
         with self.lock:
@@ -156,6 +162,31 @@ class Session:
         self.prompts = [c for c in self.commands for _ in range(reps)]
         random.shuffle(self.prompts)
         self.idx, self.events, self.active, self.t0 = 0, [], True, time.time()
+        self.grid, self.grid_final = None, False  # frame grid for live recognition
+        self.recognize = RECOG is not None and set(self.commands) <= set(RECOG.classes)
+        self.last_pred = None
+        self.threads = []
+
+
+def recognize_take(ev, ses):
+    """Runs in a thread after a take ends: wait for the 0.3 s tail, then classify the take."""
+    from build_dataset import FS, PAD_S
+    try:
+        need = ev["end"] + int(PAD_S * FS) + 2000
+        t_end = time.time() + 3
+        while REC.now_sample() < need and time.time() < t_end:
+            time.sleep(0.05)
+        words = REC.words_so_far()
+        if not ses.grid_final:  # same grid rule as build_dataset: first 30 s of the session
+            from live_recog import session_grid
+            ses.grid = session_grid(words)
+            ses.grid_final = len(words) >= 4 * 30 * FS
+        r = RECOG.predict(words, ev["start"], ev["end"], ses.grid)
+        r["correct"] = r["word"] == ev["command"]
+        ev["pred"] = r
+        ses.last_pred = dict(idx=ev["idx"], said=ev["command"], **r)
+    except Exception as e:
+        ses.last_pred = dict(idx=ev["idx"], said=ev["command"], error=str(e))
 
 
 REC = None
@@ -190,6 +221,7 @@ def save_session(words, ended_early=False):
                 protocol="after EchoSpeech CHI'23 discrete; push-to-record (space start/stop, auto-end 4 s)",
                 firmware="experiments/split_bands (speaker 0 18-24 kHz, speaker 1 25-31 kHz)",
                 level_percent=LEVEL_PERMILLE / 10, soft_edges=True, git_commit=git_commit(),
+                live_model=(dict(file=RECOG.name, trained_on=RECOG.trained_on) if SES.recognize else None),
                 audio_rate=100_000, word_layout="interleaved mic2(pin8), mic1(pin6)",
                 note="take start/end in 100 kHz audio samples from the start of raw_words",
                 events=SES.events)
@@ -236,6 +268,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json(dict(active=SES.active, idx=getattr(SES, "idx", 0), total=len(getattr(SES, "prompts", [])),
                             prompt=SES.prompts[SES.idx] if SES.active and SES.idx < len(SES.prompts) else None,
                             error=REC.error))
+        elif path == "/pred":
+            done = [e["pred"] for e in getattr(SES, "events", []) if "pred" in e and not e.get("redo")]
+            self._json(dict(enabled=bool(getattr(SES, "recognize", False)), last=getattr(SES, "last_pred", None),
+                            n=len(done), correct=sum(p["correct"] for p in done),
+                            model=RECOG.name if RECOG else None))
         else:
             self._json({"error": "not found"}, 404)
 
@@ -269,11 +306,17 @@ class Handler(BaseHTTPRequestHandler):
                 ev["how"] = req.get("how", "space")
                 ev["redo"] = p == "/redo"
             if p == "/take_end":
+                if SES.recognize and SES.events and "end" in SES.events[-1] and not SES.events[-1].get("redo"):
+                    th = threading.Thread(target=recognize_take, args=(SES.events[-1], SES), daemon=True)
+                    th.start()
+                    SES.threads.append(th)
                 SES.idx += 1
             self._json(dict(idx=SES.idx, finished=SES.idx >= len(SES.prompts)))
         elif p == "/finish":
             if not SES.active:
                 return self._json({"error": "no session running"}, 400)
+            for th in getattr(SES, "threads", []):  # let running recognitions read their tail and finish
+                th.join(timeout=6)
             words = REC.stop()
             d = save_session(words, ended_early=bool(req.get("early")))
             SES.active = False
@@ -297,7 +340,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--model", help="classify each take live with this model (from train_digits.py --save)")
     a = ap.parse_args()
+    global RECOG
+    if a.model:
+        from live_recog import Recognizer
+        RECOG = Recognizer(a.model)
+        print(f"live recognition: {RECOG.name}, classes {RECOG.classes}")
     REC = Recorder(dry=a.dry)
     OUT.mkdir(parents=True, exist_ok=True)
     print(f"open http://localhost:{a.port}  ({'dry run, no Teensy' if a.dry else 'recording from the Teensy'})")

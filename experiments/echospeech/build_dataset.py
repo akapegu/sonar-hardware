@@ -46,19 +46,30 @@ def decode_pdm(words, chunk=2_000_000, overlap=4_000):
     return (x - x.mean()).astype(np.float32)
 
 
-def session_profiles_fn(audio):
+def session_profiles_fn(audio, start=None):
     """Band-pass both bands for both mics, find the global frame grid, return a function that
-    gives the cropped differential features (4, 80, T) for a sample range."""
+    gives the cropped differential features (4, 80, T) for a sample range. The grid is the
+    strongest lag in the first 30 s (as the official code: correlate the continuous signal with
+    the chirp, fold into frames, median over frames) placed at bin 250; pass `start` to reuse a
+    grid found earlier (live recognition), in samples relative to the start of `audio`."""
+    filt = bandpass_all(audio)
+    tx = [chirp(*BANDS[0]), chirp(*BANDS[1])]
+    T = [np.fft.rfft(t[::-1], 2 * FRAME) for t in tx]
+    if start is None:
+        start = grid_start(filt, tx)
+    return _feats_fn(filt, T, start), start
+
+
+def bandpass_all(audio):
     filt = np.zeros((2, 2, audio.shape[1]), np.float32)
     for n in range(2):
         b, a = butter(5, [BP[n][0] / (FS / 2), BP[n][1] / (FS / 2)], btype="band")
         for c in range(2):
             filt[n, c] = lfilter(b, a, audio[c]).astype(np.float32)
-    tx = [chirp(*BANDS[0]), chirp(*BANDS[1])]
-    T = [np.fft.rfft(t[::-1], 2 * FRAME) for t in tx]
-    # global frame grid from the first 30 s (median over frames, as in sonispeech_capture)
-    # as the official code: correlate the continuous signal with the chirp, fold into frames,
-    # take the strongest lag (median over frames, as tools/sonispeech_capture.py) and put it at 250
+    return filt
+
+
+def grid_start(filt, tx):
     from scipy.signal import fftconvolve
     L = min(filt.shape[2], 30 * FS) // FRAME * FRAME
     acc = []
@@ -67,8 +78,10 @@ def session_profiles_fn(audio):
             cc = fftconvolve(filt[n, c, :L], tx[n][::-1], mode="full")[FRAME - 1:FRAME - 1 + L]
             acc.append(np.abs(cc).reshape(-1, FRAME))
     sp = np.median(np.concatenate(acc), axis=0)
-    start = (int(np.argmax(sp)) + FRAME - FRAME // 2) % FRAME
+    return (int(np.argmax(sp)) + FRAME - FRAME // 2) % FRAME
 
+
+def _feats_fn(filt, T, start):
     def feats(s0, s1, mode="enhanced", avg=4, lag=10):
         """mode 'plain': frame minus previous frame (EchoSpeech / SoniSpeech differential).
         mode 'enhanced': |profile| averaged over `avg` frames, minus the frame `lag` frames earlier
@@ -90,7 +103,7 @@ def session_profiles_fn(audio):
             m = np.abs(uniform_filter1d(prof, avg, axis=2))
             d = (m[:, :, lag:] - m[:, :, :-lag])[:, :, avg:]
         return d.reshape(4, d.shape[2], FRAME)[:, :, CROP[0]:CROP[1]].transpose(0, 2, 1)
-    return feats, start
+    return feats
 
 
 def build(sdir, mode="enhanced"):

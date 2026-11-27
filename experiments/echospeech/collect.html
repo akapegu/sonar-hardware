@@ -63,6 +63,12 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
 canvas { width: 100%; height: 100%; min-height: 260px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
 footer.keys { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; color: var(--muted); font-size: 13px; }
 kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg); font-family: var(--mono); font-size: 12px; }
+#heard { display: flex; gap: 14px; align-items: baseline; justify-content: center; flex-wrap: wrap; min-height: 2.2em;
+         font-size: 18px; color: var(--muted); }
+#heard b { font-size: 28px; color: var(--fg); }
+#heard .ok { color: var(--accent); font-weight: 700; }
+#heard .no { color: var(--rec); font-weight: 700; }
+#score { font-size: 14px; font-variant-numeric: tabular-nums; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -111,6 +117,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5
     <div id="word" class="dim">·</div>
     <div id="instruction"></div>
     <div class="bar"><div id="bar"></div></div>
+    <div id="heard" hidden aria-live="polite"><span id="heardtext">model is listening…</span><span id="score"></span></div>
   </div>
   <div class="sbar"><div id="sbar"></div></div>
   <div class="panel" id="livebox">
@@ -125,6 +132,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5
 
 <script>
 const $ = id => document.getElementById(id);
+let predTimer = null, lastPredIdx = -1, predScore = "";
 let cfg = null, state = "setup", total = 0, idx = 0, prompt = null, takeT0 = 0, raf = null, paused = false, startedAt = 0, liveTimer = null;
 const GAP_MS = 500, LEAD_MS = 3000;
 const PATHS = ["spk 0 → mic 1", "spk 0 → mic 2", "spk 1 → mic 1", "spk 1 → mic 2"];
@@ -182,6 +190,9 @@ async function startSession() {
   $("instruction").textContent = `session #${r.number}${$("practice").checked ? " (practice)" : ""} · keep still while the signal settles`;
   state = "lead"; startedAt = performance.now() + LEAD_MS;
   liveTimer = setInterval(drawLive, 120);
+  lastPredIdx = -1; predScore = ""; $("heard").hidden = true; $("score").textContent = "";
+  $("heardtext").textContent = "model is listening…";
+  clearInterval(predTimer); predTimer = setInterval(pollPred, 300);
   setTimeout(nextPrompt, LEAD_MS);
 }
 function setStatus(cls, text) { $("status").className = cls; $("statustext").textContent = text; }
@@ -223,12 +234,28 @@ async function takeEnd(path, how) {
 async function finish(early) {
   state = "saving"; setStatus("", "saving"); clearInterval(liveTimer);
   const r = await post("/finish", { early });
+  await pollPred(); clearInterval(predTimer);
   state = "setup"; $("run").hidden = true; $("setup").hidden = false;
   $("meta").textContent = "not recording";
   $("err").textContent = r.error ? r.error : "";
-  $("plan").textContent = r.error ? "" : `Saved ${r.takes} takes (${Math.round(r.seconds)} s) to ${r.saved}. Take the glasses off and on before the next session.`;
+  $("plan").textContent = r.error ? "" : `Saved ${r.takes} takes (${Math.round(r.seconds)} s) to ${r.saved}. ${predScore ? " Model: " + predScore + "." : ""} Take the glasses off and on before the next session.`;
   loadConfig(); loadSessions();
 }
+// live recognition: what the model heard for the last take, and the running score
+async function pollPred() {
+  let r; try { r = await get("/pred"); } catch { return; }
+  if (!r.enabled) { $("heard").hidden = true; return; }
+  $("heard").hidden = false;
+  if (r.n) { predScore = `${r.correct} / ${r.n} right (${Math.round(100 * r.correct / r.n)}%)`; $("score").textContent = predScore; }
+  const p = r.last;
+  if (!p || p.idx === lastPredIdx) return;
+  lastPredIdx = p.idx;
+  if (p.error) { $("heardtext").textContent = "recognition error: " + p.error; return; }
+  $("heardtext").innerHTML = `you mouthed <b>${p.said}</b> · model heard <b>${p.word}</b> ` +
+    `<span class="${p.correct ? "ok" : "no"}">${p.correct ? "✓ right" : "✗ wrong"}</span> ` +
+    `<span>${Math.round(p.conf * 100)}% sure</span>`;
+}
+
 function showError(e) { clearInterval(liveTimer); state = "setup"; $("run").hidden = true; $("setup").hidden = false; $("err").textContent = "Recording error: " + e; }
 
 // live picture: 4 stacked strips, diverging white -> red (+) / blue (-)
