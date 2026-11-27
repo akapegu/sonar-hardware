@@ -45,7 +45,9 @@ OUT = ROOT / "captures" / "echospeech"
 TRASH = OUT / "_trash"
 LEVEL_PERMILLE = 100  # 10%
 MAX_TAKE_S = 4.0
-COMMAND_SETS = {"all 31": ALL, **{k: v for k, v in COMMANDS.items()}}
+COMMAND_SETS = {"all 31": ALL, **{k: v for k, v in COMMANDS.items()},
+                "Nine Eight Six (confusable digits)": ["Nine", "Eight", "Six"]}
+CANON = {c.lower(): c for c in ALL}  # custom lists use the official spelling, so labels stay consistent
 RECOG = None  # live_recog.Recognizer when --model is given
 
 
@@ -301,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "enter a participant ID"}, 400)
             set_name = req.get("command_set", "all 31")
             if set_name == "custom":
-                cmds = [c.strip() for c in req.get("custom", "").split(",") if c.strip()]
+                cmds = [CANON.get(c.strip().lower(), c.strip()) for c in req.get("custom", "").split(",") if c.strip()]
             else:
                 cmds = COMMAND_SETS.get(set_name, ALL)
             if not cmds:
