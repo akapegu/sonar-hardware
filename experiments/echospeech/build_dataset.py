@@ -110,7 +110,9 @@ def build(sdir, mode="enhanced"):
         clips.append(feats(s0, s1, mode).astype(np.float16))
         labels.append(e["command"])
         order.append(i)
-    np.savez_compressed(sdir / f"clips_{mode}.npz", clips=np.array(clips, dtype=object), labels=np.array(labels),
+    arr = np.empty(len(clips), dtype=object)  # ragged clips; np.array() would try to broadcast them
+    arr[:] = clips
+    np.savez_compressed(sdir / f"clips_{mode}.npz", clips=arr, labels=np.array(labels),
                         order=np.array(order), frame_start=start, mode=mode)
     return len(clips), audio.shape[1] / FS
 
