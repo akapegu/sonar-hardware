@@ -166,6 +166,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json(dict(saved=str(d.relative_to(ROOT)) if d else None))
         elif self.path == "/mark":
             self._json(dict(state=DEMO.manual() if DEMO.running else "stopped"))
+        elif self.path == "/label":  # test mode: the digit the page asked for, attached to a result
+            i = int(req.get("n", -1))
+            if 0 <= i < len(DEMO.results):
+                DEMO.results[i]["target"] = req.get("target")
+            self._json(dict(ok=True))
         elif self.path == "/sensitivity":
             DEMO.k_on = float(min(5.0, max(1.5, req.get("k_on", 2.5))))
             if getattr(DEMO, "det", None):

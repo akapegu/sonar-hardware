@@ -62,6 +62,14 @@ footer { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; col
 kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg);
       font-family: var(--mono); font-size: 12px; }
 .err { color: var(--rec); font-size: 14px; }
+#target { display: none; text-align: center; gap: 4px; }
+body.test #target { display: grid; }
+#target .say { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+#targetword { font-size: clamp(44px, 7vw, 84px); font-weight: 750; color: var(--accent); line-height: 1.05; }
+#targetinfo { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#verdict { font-size: 22px; font-weight: 700; min-height: 1.3em; }
+#verdict.ok { color: var(--accent); } #verdict.no { color: var(--rec); }
+button.on { background: var(--warn); color: #2a1803; }
 </style>
 </head>
 <body>
@@ -70,11 +78,18 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5
   <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">stopped</span></span>
   <span class="spacer"></span>
   <span class="meta" id="meta"></span>
+  <button class="ghost" id="testbtn">Test mode: off (t)</button>
   <button id="go">Start</button>
 </header>
 
 <main>
   <section class="panel" id="big" aria-live="polite">
+    <div id="target">
+      <div class="say">mouth this</div>
+      <div id="targetword">·</div>
+      <div id="targetinfo"></div>
+    </div>
+    <div id="verdict"></div>
     <div id="bigword" class="dim">·</div>
     <div class="conf"><div id="confbar"></div></div>
     <div id="bigconf">press Start, keep still for 3 s, then mouth a digit</div>
@@ -109,6 +124,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5
   <span>Just mouth a digit and pause ~1 s</span>
   <span><kbd>space</kbd> manual: press, mouth, press</span>
   <span><kbd>Enter</kbd> start / stop</span><span><kbd>c</kbd> clear</span>
+  <span><kbd>t</kbd> test mode</span><span><kbd>x</kbd> undo last scored word (stray trigger)</span>
 </footer>
 
 <script>
@@ -116,6 +132,45 @@ const $ = id => document.getElementById(id);
 const UNSURE = 0.5, METER_MAX = 6;
 const PATHS = ["18–24 kHz → mic 1", "18–24 kHz → mic 2", "25–31 kHz → mic 1", "25–31 kHz → mic 2"];
 let running = false, shown = 0, seq = [], timers = [];
+// test mode: each digit twice in random order; a result arriving while waiting is scored against the target
+const DIGITS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+let test = false, targets = [], ti = 0, waiting = false, scored = [];
+function newTest() {
+  targets = [...DIGITS, ...DIGITS];
+  for (let i = targets.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [targets[i], targets[j]] = [targets[j], targets[i]]; }
+  ti = 0; scored = []; waiting = true; $("verdict").textContent = ""; showTarget();
+}
+function showTarget() {
+  const right = scored.filter(s => s.ok).length;
+  if (ti >= targets.length) {
+    $("targetword").textContent = "done"; waiting = false;
+    $("targetinfo").textContent = `${right} / ${scored.length} right (${Math.round(100 * right / Math.max(1, scored.length))}%) · press t twice for a new round`;
+    return;
+  }
+  $("targetword").textContent = targets[ti];
+  $("targetinfo").textContent = `${ti + 1} / ${targets.length}` + (scored.length ? ` · ${right} / ${scored.length} right (${Math.round(100 * right / scored.length)}%)` : "");
+}
+function scoreResult(r, n) {
+  if (!test || !waiting || r.error) return;
+  const target = targets[ti], ok = r.word === target && r.conf >= UNSURE;
+  scored.push({ n, target, ok, word: r.word });
+  post("/label", { n, target });
+  $("verdict").textContent = ok ? "✓ right" : (r.word === target ? "✗ right word, but unsure" : `✗ heard ${r.word}`);
+  $("verdict").className = ok ? "ok" : "no";
+  waiting = false; ti += 1;
+  setTimeout(() => { if (test) { waiting = true; $("verdict").textContent = ""; showTarget(); } }, 1300);
+  showTarget();
+}
+function undoScore() {
+  if (!test || !scored.length) return;
+  scored.pop(); ti = Math.max(0, ti - 1); waiting = true;
+  $("verdict").textContent = "last word discarded"; $("verdict").className = ""; showTarget();
+}
+function setTest(on) {
+  test = on; document.body.classList.toggle("test", on);
+  $("testbtn").textContent = `Test mode: ${on ? "on" : "off"} (t)`; $("testbtn").className = on ? "on" : "ghost";
+  if (on) newTest(); else $("verdict").textContent = "";
+}
 async function get(p) { return (await fetch(p)).json(); }
 async function post(p, b = {}) { return (await fetch(p, { method: "POST", body: JSON.stringify(b) })).json(); }
 
@@ -147,8 +202,8 @@ async function poll() {
   $("lvl").textContent = `${s.level.toFixed(1)}× quiet`;
   $("meta").textContent = `model ${s.model}`;
   if (s.n > shown) {
-    const fresh = s.results.slice(-(s.n - shown)); shown = s.n;
-    for (const r of fresh) if (!r.error && r.conf >= UNSURE) seq.push(r.word);
+    const fresh = s.results.slice(-(s.n - shown)), first = s.n - fresh.length; shown = s.n;
+    fresh.forEach((r, k) => { if (!r.error && r.conf >= UNSURE) seq.push(r.word); scoreResult(r, first + k); });
     const last = s.results[s.results.length - 1];
     if (last.error) $("err").textContent = "recognition error: " + last.error;
     else show(last);
@@ -200,6 +255,7 @@ async function drawLive() {
 }
 
 $("go").addEventListener("click", toggle);
+$("testbtn").addEventListener("click", () => setTest(!test));
 $("clear").addEventListener("click", () => { seq = []; render([]); $("hist").innerHTML = ""; });
 $("sens").addEventListener("input", e => post("/sensitivity", { k_on: 6.5 - +e.target.value }));
 document.addEventListener("keydown", async e => {
@@ -207,6 +263,8 @@ document.addEventListener("keydown", async e => {
   if (e.key === "Enter") { e.preventDefault(); toggle(); }
   else if (e.key === " " && running) { e.preventDefault(); await post("/mark"); }
   else if (e.key === "c" || e.key === "C") { seq = []; render([]); $("hist").innerHTML = ""; }
+  else if (e.key === "t" || e.key === "T") setTest(!test);
+  else if (e.key === "x" || e.key === "X") undoScore();
 });
 </script>
 </body>
