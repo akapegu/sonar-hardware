@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silent digits · live demo</title>
+<style>
+:root {
+  --bg: #0f1412; --panel: #172019; --panel2: #1d2822; --fg: #e8efe9; --muted: #8fa097; --line: #2c3832;
+  --accent: #4fc7b5; --rec: #ff6b5e; --warn: #f0a24e;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif; --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); min-height: 100vh;
+       display: grid; grid-template-rows: auto 1fr auto; gap: 14px; padding: 16px 22px; }
+header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 18px; margin: 0; font-weight: 650; }
+.pill { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; color: var(--muted);
+        border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+.pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.pill.listening { color: var(--accent); } .pill.listening .dot { background: var(--accent); }
+.pill.word { color: var(--rec); } .pill.word .dot { background: var(--rec); animation: pulse .8s infinite; }
+.pill.thinking { color: var(--warn); } .pill.thinking .dot { background: var(--warn); }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pill.word .dot { animation: none; } }
+.spacer { flex: 1; }
+.meta { color: var(--muted); font-size: 13px; }
+button { background: var(--accent); color: #062a24; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px;
+         font-weight: 650; cursor: pointer; }
+button.stop { background: var(--rec); color: #2a0703; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 6px 12px; font-size: 13px; font-weight: 500; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1.3fr); gap: 14px; min-height: 0; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+#big { display: grid; place-items: center; text-align: center; gap: 6px; align-content: center; }
+#bigword { font-size: clamp(90px, 16vw, 210px); font-weight: 750; line-height: 1; letter-spacing: -.02em; }
+#bigword.unsure { color: var(--muted); }
+#bigword.dim { color: var(--line); }
+#bigconf { font-size: 16px; color: var(--muted); min-height: 1.3em; font-variant-numeric: tabular-nums; }
+#top3 { font-size: 14px; color: var(--muted); min-height: 1.2em; font-variant-numeric: tabular-nums; }
+.conf { width: min(360px, 80%); height: 8px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
+.conf > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#right { display: grid; grid-template-rows: auto auto auto 1fr; gap: 14px; min-height: 0; }
+.label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+         display: flex; justify-content: space-between; align-items: center; }
+#seq { font-family: var(--mono); font-size: 34px; letter-spacing: .12em; min-height: 1.3em; word-break: break-all; }
+#hist { display: flex; gap: 8px; flex-wrap: wrap; min-height: 34px; }
+.chip { border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 14px; background: var(--panel2);
+        font-variant-numeric: tabular-nums; }
+.chip small { color: var(--muted); margin-left: 5px; }
+.chip.unsure { color: var(--muted); border-style: dashed; }
+.chip.manual { border-color: var(--warn); }
+.meter { position: relative; height: 12px; background: var(--panel2); border-radius: 6px; overflow: hidden; }
+.meter > div { height: 100%; width: 0; background: var(--muted); }
+.meter > div.hot { background: var(--rec); }
+.meter > i { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); }
+.row { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+canvas { width: 100%; height: 100%; min-height: 200px; background: #fff; border-radius: 8px; image-rendering: pixelated; }
+footer { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; color: var(--muted); font-size: 13px; }
+kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--fg);
+      font-family: var(--mono); font-size: 12px; }
+.err { color: var(--rec); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Silent digits · live demo</h1>
+  <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">stopped</span></span>
+  <span class="spacer"></span>
+  <span class="meta" id="meta"></span>
+  <button id="go">Start</button>
+</header>
+
+<main>
+  <section class="panel" id="big" aria-live="polite">
+    <div id="bigword" class="dim">·</div>
+    <div class="conf"><div id="confbar"></div></div>
+    <div id="bigconf">press Start, keep still for 3 s, then mouth a digit</div>
+    <div id="top3"></div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <section id="right">
+    <div class="panel">
+      <div class="label"><span>Digits so far</span><button class="ghost" id="clear">Clear (c)</button></div>
+      <div id="seq"></div>
+    </div>
+    <div class="panel">
+      <div class="label"><span>Recent words</span><span id="count"></span></div>
+      <div id="hist"></div>
+    </div>
+    <div class="panel">
+      <div class="label"><span>Mouth activity</span><span id="lvl"></span></div>
+      <div class="meter"><div id="meter"></div><i id="thr"></i></div>
+      <div class="row"><span>less sensitive</span>
+        <input id="sens" type="range" min="1.5" max="5" step="0.1" value="4" aria-label="Detection threshold">
+        <span>more</span></div>
+    </div>
+    <div class="panel" style="display:grid;grid-template-rows:auto 1fr;min-height:0">
+      <div class="label"><span>Live echo picture · 4 paths</span><span id="liveinfo"></span></div>
+      <canvas id="live" width="1200" height="316" aria-label="Live echo profiles of the four speaker-microphone paths"></canvas>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>Just mouth a digit and pause ~1 s</span>
+  <span><kbd>space</kbd> manual: press, mouth, press</span>
+  <span><kbd>Enter</kbd> start / stop</span><span><kbd>c</kbd> clear</span>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const UNSURE = 0.5, METER_MAX = 6;
+const PATHS = ["18–24 kHz → mic 1", "18–24 kHz → mic 2", "25–31 kHz → mic 1", "25–31 kHz → mic 2"];
+let running = false, shown = 0, seq = [], timers = [];
+async function get(p) { return (await fetch(p)).json(); }
+async function post(p, b = {}) { return (await fetch(p, { method: "POST", body: JSON.stringify(b) })).json(); }
+
+async function toggle() {
+  if (!running) {
+    await post("/start"); running = true; shown = 0; seq = []; render([]);
+    $("go").textContent = "Stop"; $("go").className = "stop";
+    $("bigword").textContent = "·"; $("bigword").className = "dim";
+    $("bigconf").textContent = "keep still while the signal settles…"; $("top3").textContent = ""; $("confbar").style.width = "0";
+    timers = [setInterval(poll, 150), setInterval(drawLive, 150)];
+  } else {
+    timers.forEach(clearInterval); running = false;
+    const r = await post("/stop");
+    $("go").textContent = "Start"; $("go").className = "";
+    setPill("stopped", "stopped"); $("meta").textContent = r.saved ? `saved ${r.saved}` : "";
+  }
+}
+function setPill(cls, text) { $("pill").className = "pill " + cls; $("pilltext").textContent = text; }
+
+async function poll() {
+  let s; try { s = await get("/status"); } catch { return; }
+  if (s.error) { $("err").textContent = "Recording error: " + s.error; }
+  const labels = { settling: "settling", listening: "listening", word: "hearing a word", thinking: "recognising" };
+  setPill(s.manual ? "word" : s.state, s.manual ? "manual take…" : (labels[s.state] || s.state));
+  if (s.state === "listening" && $("bigconf").textContent.startsWith("keep still")) $("bigconf").textContent = "mouth a digit";
+  $("meter").style.width = Math.min(100, s.level / METER_MAX * 100) + "%";
+  $("meter").className = s.level > s.k_on ? "hot" : "";
+  $("thr").style.left = (s.k_on / METER_MAX * 100) + "%";
+  $("lvl").textContent = `${s.level.toFixed(1)}× quiet`;
+  $("meta").textContent = `model ${s.model}`;
+  if (s.n > shown) {
+    const fresh = s.results.slice(-(s.n - shown)); shown = s.n;
+    for (const r of fresh) if (!r.error && r.conf >= UNSURE) seq.push(r.word);
+    const last = s.results[s.results.length - 1];
+    if (last.error) $("err").textContent = "recognition error: " + last.error;
+    else show(last);
+    render(s.results);
+  }
+}
+const DIGIT = { Zero: "0", One: "1", Two: "2", Three: "3", Four: "4", Five: "5", Six: "6", Seven: "7", Eight: "8", Nine: "9" };
+function show(r) {
+  const sure = r.conf >= UNSURE;
+  $("bigword").textContent = sure ? r.word : r.word + "?";
+  $("bigword").className = sure ? "" : "unsure";
+  $("confbar").style.width = Math.round(r.conf * 100) + "%";
+  $("bigconf").textContent = `${Math.round(r.conf * 100)}% sure${sure ? "" : " · not counted"}${r.how === "manual" ? " · manual" : ""}`;
+  $("top3").textContent = r.top3.map(([w, p]) => `${w} ${Math.round(p * 100)}%`).join("  ·  ");
+}
+function render(results) {
+  $("seq").textContent = seq.map(w => DIGIT[w] ?? w).join(" ");
+  const h = results.filter(r => !r.error).slice(-14).reverse();
+  $("hist").innerHTML = h.map(r => `<span class="chip ${r.conf < UNSURE ? "unsure" : ""} ${r.how === "manual" ? "manual" : ""}">` +
+    `${r.word}<small>${Math.round(r.conf * 100)}%</small></span>`).join("");
+  $("count").textContent = results.length ? `${results.length} heard` : "";
+}
+
+async function drawLive() {
+  let r; try { r = await get("/live"); } catch { return; }
+  if (!r.ready) { $("liveinfo").textContent = "settling…"; return; }
+  const raw = Uint8Array.from(atob(r.data), c => c.charCodeAt(0));
+  const P = r.paths, B = r.bins, F = r.frames, cv = $("live"), W = 1200;
+  const stripH = 76, gap = 4, H = P * stripH + (P - 1) * gap;
+  if (cv.height !== H) cv.height = H;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), d = img.data;
+  d.fill(255);
+  for (let p = 0; p < P; p++) {
+    const y0 = p * (stripH + gap);
+    for (let y = 0; y < stripH; y++) {
+      const bin = B - 1 - Math.floor(y * B / stripH);
+      for (let x = 0; x < W; x++) {
+        const v = raw[(p * B + bin) * F + Math.min(F - 1, Math.floor(x * F / W))];
+        const t = (v - 127.5) / 127.5, o = ((y0 + y) * W + x) * 4;
+        if (t >= 0) { d[o] = 255; d[o + 1] = 255 * (1 - t); d[o + 2] = 255 * (1 - t); }
+        else { d[o] = 255 * (1 + t); d[o + 1] = 255 * (1 + t); d[o + 2] = 255; }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.font = "13px system-ui"; ctx.fillStyle = "#1f2328";
+  for (let p = 0; p < P; p++) ctx.fillText(PATHS[p], 8, p * (stripH + gap) + 16);
+  $("liveinfo").textContent = `last ${(F / 200).toFixed(1)} s`;
+}
+
+$("go").addEventListener("click", toggle);
+$("clear").addEventListener("click", () => { seq = []; render([]); $("hist").innerHTML = ""; });
+$("sens").addEventListener("input", e => post("/sensitivity", { k_on: 6.5 - +e.target.value }));
+document.addEventListener("keydown", async e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "Enter") { e.preventDefault(); toggle(); }
+  else if (e.key === " " && running) { e.preventDefault(); await post("/mark"); }
+  else if (e.key === "c" || e.key === "C") { seq = []; render([]); $("hist").innerHTML = ""; }
+});
+</script>
+</body>
+</html>

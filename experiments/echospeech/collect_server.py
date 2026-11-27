@@ -87,6 +87,7 @@ class Recorder:
 
     def start(self):
         self.words_per_mic, self.chunks, self.running, self.error = 0, [], True, None
+        self.offs = [0]  # offs[i] = interleaved word index where chunks[i] starts; offs[-1] = total
         with self.q.mutex:
             self.q.queue.clear()
         self.live.reset()
@@ -104,6 +105,18 @@ class Recorder:
             chunks = list(self.chunks)
         return np.concatenate(chunks) if chunks else np.zeros(0, np.uint16)
 
+    def words_range(self, a, b):
+        """Interleaved words [a, b) of the current recording, copying only the chunks needed."""
+        import bisect
+        with self.lock:
+            offs, chunks = list(self.offs), list(self.chunks)
+        b = min(b, offs[-1])
+        if b <= a:
+            return np.zeros(0, np.uint16)
+        i, j = bisect.bisect_right(offs, a) - 1, bisect.bisect_left(offs, b)
+        w = np.concatenate(chunks[i:j])
+        return w[a - offs[i]:b - offs[i]]
+
     def now_sample(self):
         with self.lock:
             return self.words_per_mic // 2  # 32 PDM bits per 100 kHz sample, 16 bits per word
@@ -115,6 +128,7 @@ class Recorder:
             w = rng.integers(0, 65536, 20_000, dtype=np.uint16)
             with self.lock:
                 self.chunks.append(w)
+                self.offs.append(self.offs[-1] + len(w))
                 self.words_per_mic = int((time.time() - t0) * 200_000)
             self.q.put(w)
 
@@ -140,6 +154,7 @@ class Recorder:
                         w = np.frombuffer(bytes(buf[i + HDR.size:end]), "<u2")
                         with self.lock:
                             self.chunks.append(w)
+                            self.offs.append(self.offs[-1] + len(w))
                             self.words_per_mic += len(w) // 2
                         self.q.put(w)
                         del buf[:end]

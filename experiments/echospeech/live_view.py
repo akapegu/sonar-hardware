@@ -29,6 +29,10 @@ class LiveView:
         self.lock = threading.Lock()
         self.reset()
 
+    def frame_sample(self, i):
+        """Audio sample (100 kHz, from the start of the recording) where enhanced frame i starts."""
+        return self.start + (i + AVG + LAG - 1) * FRAME
+
     def reset(self):
         self.words = [np.zeros(0, np.uint16), np.zeros(0, np.uint16)]  # per mic: [mic1 (pin 6), mic2 (pin 8)]
         self.done = 0               # absolute words per mic already decoded
@@ -47,6 +51,9 @@ class LiveView:
         self.hist = deque(maxlen=AVG + LAG + 2)  # recent signed crops (4, 80)
         self.out = deque(maxlen=KEEP)            # enhanced frames (4, 80)
         self.scale = np.full(4, 1e-6)
+        self.count = 0              # enhanced frames produced so far (enhanced frame i starts at sample
+                                    # start + (i + AVG + LAG - 1) * FRAME)
+        self.listeners = []         # callables fed each new enhanced frame (index, frame)
 
     def feed(self, interleaved):
         """interleaved: uint16 words mic2, mic1, mic2, mic1, ... (as the Teensy sends them)."""
@@ -126,6 +133,9 @@ class LiveView:
                     e = now - before
                     self.scale = 0.995 * self.scale + 0.005 * np.percentile(np.abs(e), 99, axis=1).clip(1e-9)
                     self.out.append(e)
+                    for f in self.listeners:
+                        f(self.count, e)
+                    self.count += 1
 
     def snapshot(self):
         """uint8 image (4, 80, frames): 128 = no change; scaled per path by a running 99th percentile."""
