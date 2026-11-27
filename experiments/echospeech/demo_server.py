@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global REC, MODEL
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default=str(ROOT / "models" / "digits_pegu_all10_extra.pt"))
+    ap.add_argument("--model", default=str(ROOT / "models" / "digits_pegu_all14_extra.pt"))
     ap.add_argument("--port", type=int, default=8770)
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
