@@ -7,13 +7,14 @@ echoes to a Mac over USB.
 The decoding software (a SoniSpeech reproduction) is in
 [akapegu/sonar-glasses](https://github.com/akapegu/sonar-glasses).
 
-**Status (2026-11-26):** the rig is mounted on a glasses frame in the SoniSpeech layout
-(speakers under one lens, mics under the other). With split bands (speaker 0 at 18–24 kHz,
-speaker 1 at 25–31 kHz) silent speech shows on all four echo paths (see
+**Status (2026-11-28):** the rig is mounted on a glasses frame. With split bands (speaker 0 at
+18–24 kHz, speaker 1 at 25–31 kHz) silent speech shows on all four echo paths (see
 [Recorded signals](#recorded-signals)). The trained SoniSpeech model does not transfer to a new
-wearer and device, so the demo follows EchoSpeech: a 31-command recogniser trained on the
-wearer's own data ([experiments/echospeech](experiments/echospeech)). Every measurement is in
-[docs/rig-handoff.md](docs/rig-handoff.md).
+wearer and device, so the demo follows EchoSpeech: a recogniser trained on the wearer's own data.
+**Silent digits work: 90.8% on unseen sessions (one wearer, 14 sessions), with a hands-free live
+demo**; Nine is the weak digit (42% recall, heard as Eight or Six). Results, confusion matrix and
+how to run it: [experiments/echospeech](experiments/echospeech#digit-recognition-results-so-far-one-wearer-silent-digits-zeronine).
+Every measurement is in [docs/rig-handoff.md](docs/rig-handoff.md).
 
 ## Contents
 
@@ -32,7 +33,7 @@ wearer's own data ([experiments/echospeech](experiments/echospeech)). Every meas
 | [tools/make_tx_header.py](tools/make_tx_header.py) | Copies the official chirps from a local dataset into a git-ignored firmware header |
 | [tools/make_figures.py](tools/make_figures.py) | Regenerates the figures below from local recordings |
 | [tools/run_model.py](tools/run_model.py) | Runs the trained SoniSpeech model (software repo) on a rig recording |
-| [experiments/](experiments/) | take_turns, split_bands (current signal plan), echospeech (command demo: collection, dataset) |
+| [experiments/](experiments/) | take_turns, split_bands (current signal plan), echospeech (silent digit recognition: collection page, training, evaluation, live demo) |
 
 ## Recorded signals
 
